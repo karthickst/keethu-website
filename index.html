@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Keethu is a Rust pub/sub server delivering messages to 100,000 concurrent subscribers with ≤10ms p99 latency on a single machine. No Kafka cluster needed.">
+<meta name="theme-color" content="#0f0f14">
+<link rel="canonical" href="https://keethu.com/">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Keethu — 100K Subscribers. Sub-10ms. Single Machine.">
+<meta property="og:description" content="Rust pub/sub at 100K scale with sub-10ms p99 latency on a single machine.">
+<meta property="og:url" content="https://keethu.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Keethu">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Keethu — Pub/Sub at 100K Scale">
+<meta name="twitter:description" content="Rust pub/sub delivering to 100K subscribers with ≤10ms p99 latency on a single machine.">
+<title>Keethu — 100K Subscribers. Sub-10ms. Single Machine.</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     background:#0f0f14;color:#e2e8f0;line-height:1.7;overflow-x:hidden}
+
+/* ── Nav ─────────────────────────────────────────────────────────────────── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;
+    background:rgba(15,15,20,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid #1e1e2e;padding:0 40px;
+    display:flex;align-items:center;justify-content:space-between;height:60px}
+.nav-logo{font-size:1.25rem;font-weight:800;
+          background:linear-gradient(135deg,#a78bfa,#60a5fa);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-links{display:flex;gap:32px;align-items:center}
+.nav-links a{color:#94a3b8;text-decoration:none;font-size:.88rem;
+             transition:color .15s}
+.nav-links a:hover{color:#e2e8f0}
+.nav-cta{background:linear-gradient(135deg,#7c3aed,#2563eb);
+         color:#fff !important;padding:8px 20px;border-radius:8px;
+         font-weight:600;font-size:.85rem !important;transition:opacity .15s !important}
+.nav-cta:hover{opacity:.85}
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.hero{min-height:100vh;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;text-align:center;
+      padding:80px 24px 60px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%,
+    rgba(124,58,237,.18) 0%,rgba(37,99,235,.1) 40%,transparent 70%);
+  pointer-events:none}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;
+            background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);
+            border-radius:20px;padding:5px 16px;font-size:.78rem;
+            color:#c4b5fd;letter-spacing:.06em;text-transform:uppercase;
+            margin-bottom:28px}
+.hero-badge .dot{width:7px;height:7px;border-radius:50%;
+                  background:#a78bfa;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}
+                  50%{opacity:.5;transform:scale(1.3)}}
+h1{font-size:clamp(2.8rem,7vw,5rem);font-weight:900;line-height:1.08;
+   background:linear-gradient(135deg,#f8fafc 30%,#a78bfa 65%,#60a5fa 100%);
+   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+   margin-bottom:24px;max-width:900px}
+.hero-sub{font-size:clamp(1rem,2.5vw,1.25rem);color:#94a3b8;
+          max-width:640px;margin-bottom:40px;line-height:1.65}
+.hero-actions{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.btn-primary{background:linear-gradient(135deg,#7c3aed,#2563eb);
+             color:#fff;text-decoration:none;padding:14px 32px;
+             border-radius:10px;font-weight:700;font-size:1rem;
+             transition:transform .15s,box-shadow .15s;
+             box-shadow:0 0 32px rgba(124,58,237,.3)}
+.btn-primary:hover{transform:translateY(-2px);
+                    box-shadow:0 8px 40px rgba(124,58,237,.45)}
+.btn-secondary{background:rgba(255,255,255,.06);border:1px solid #2d2d3f;
+               color:#e2e8f0;text-decoration:none;padding:14px 32px;
+               border-radius:10px;font-weight:600;font-size:1rem;
+               transition:background .15s,border-color .15s}
+.btn-secondary:hover{background:rgba(255,255,255,.1);border-color:#4b5563}
+
+/* ── Stats bar ─────────────────────────────────────────────────────────────── */
+.stats{display:flex;justify-content:center;gap:0;flex-wrap:wrap;
+       border-top:1px solid #1e1e2e;border-bottom:1px solid #1e1e2e;
+       background:#0d0d12}
+.stat{flex:1;min-width:160px;padding:28px 20px;text-align:center;
+      border-right:1px solid #1e1e2e}
+.stat:last-child{border-right:none}
+.stat .val{font-size:2rem;font-weight:800;
+           background:linear-gradient(135deg,#a78bfa,#60a5fa);
+           -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+           display:block;line-height:1.1}
+.stat .lab{font-size:.75rem;color:#6b7280;margin-top:4px;
+           text-transform:uppercase;letter-spacing:.07em}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+section{padding:88px 24px}
+.container{max-width:1060px;margin:0 auto}
+.section-label{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+               color:#7c3aed;font-weight:700;margin-bottom:12px}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;
+               color:#f1f5f9;line-height:1.2;margin-bottom:16px}
+.section-body{font-size:1.05rem;color:#94a3b8;max-width:580px;line-height:1.7}
+
+/* ── Feature grid ─────────────────────────────────────────────────────────── */
+.features{background:#0d0d12}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+              gap:20px;margin-top:48px}
+.feature-card{background:#16161f;border:1px solid #2d2d3f;border-radius:14px;
+              padding:28px;transition:border-color .2s,transform .2s}
+.feature-card:hover{border-color:#7c3aed;transform:translateY(-3px)}
+.feature-icon{font-size:1.6rem;margin-bottom:16px;display:block}
+.feature-card h3{font-size:1.05rem;font-weight:700;color:#f1f5f9;margin-bottom:8px}
+.feature-card p{font-size:.88rem;color:#6b7280;line-height:1.65}
+.feature-card code{background:#1e1e2e;color:#a78bfa;padding:1px 6px;
+                   border-radius:4px;font-size:.82em}
+
+/* ── How it works ─────────────────────────────────────────────────────────── */
+.how{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;
+     margin-top:48px}
+@media(max-width:768px){.how{grid-template-columns:1fr}}
+.how-diagram{background:#0d1117;border:1px solid #30363d;border-radius:14px;
+             padding:28px;font-family:"JetBrains Mono","Fira Code",monospace;
+             font-size:.78rem;color:#8b949e;line-height:2}
+.how-diagram .hl{color:#58a6ff}.how-diagram .grn{color:#3fb950}
+.how-diagram .org{color:#f0883e}.how-diagram .red{color:#ff7b72}
+.how-diagram .pur{color:#d2a8ff}
+.steps{display:flex;flex-direction:column;gap:24px;margin-top:24px}
+.step{display:flex;gap:16px;align-items:flex-start}
+.step-num{width:32px;height:32px;border-radius:50%;flex-shrink:0;
+          background:linear-gradient(135deg,#7c3aed,#2563eb);
+          display:flex;align-items:center;justify-content:center;
+          font-size:.8rem;font-weight:800;color:#fff}
+.step-text h4{font-size:.95rem;font-weight:700;color:#e2e8f0;margin-bottom:2px}
+.step-text p{font-size:.85rem;color:#6b7280}
+
+/* ── Use cases ─────────────────────────────────────────────────────────────── */
+.usecases{background:#0d0d12}
+.uc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+         gap:16px;margin-top:48px}
+.uc-card{background:linear-gradient(135deg,#16161f,#1e1b2e);
+         border:1px solid #2d2d3f;border-radius:12px;padding:24px;
+         position:relative;overflow:hidden}
+.uc-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#7c3aed,#2563eb)}
+.uc-card h3{font-size:.95rem;font-weight:700;color:#c4b5fd;margin-bottom:8px}
+.uc-card p{font-size:.82rem;color:#64748b;line-height:1.6}
+
+/* ── Performance table ─────────────────────────────────────────────────────── */
+.perf-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:.88rem}
+.perf-table th{background:#16161f;color:#a78bfa;padding:12px 16px;
+               text-align:left;border-bottom:1px solid #3730a3;font-size:.78rem;
+               text-transform:uppercase;letter-spacing:.07em}
+.perf-table td{padding:11px 16px;border-bottom:1px solid #1e1e2e;color:#cbd5e1}
+.perf-table tr:hover td{background:#16161f}
+.perf-table td:first-child{color:#f1f5f9;font-weight:500}
+.perf-table .green{color:#34d399;font-weight:700}
+.perf-table .purple{color:#a78bfa;font-weight:700}
+
+/* ── Tutorials CTA ─────────────────────────────────────────────────────────── */
+.tutorials-cta{background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 100%);
+               border:1px solid #3730a3;border-radius:20px;padding:56px 48px;
+               text-align:center;position:relative;overflow:hidden}
+.tutorials-cta::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 60% at 50% 50%,
+    rgba(124,58,237,.15) 0%,transparent 70%);pointer-events:none}
+.tutorials-cta h2{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:800;
+                  color:#f1f5f9;margin-bottom:14px;position:relative}
+.tutorials-cta p{color:#94a3b8;font-size:1.05rem;max-width:540px;
+                 margin:0 auto 32px;position:relative}
+.tut-cards{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;
+           margin-bottom:36px;position:relative}
+.tut-card{background:rgba(255,255,255,.05);border:1px solid rgba(167,139,250,.25);
+          border-radius:10px;padding:14px 22px;text-align:left;min-width:180px}
+.tut-card .tut-label{font-size:.68rem;text-transform:uppercase;
+                      letter-spacing:.1em;color:#7c3aed;font-weight:700}
+.tut-card .tut-title{font-size:.9rem;color:#e2e8f0;margin-top:2px;font-weight:600}
+.tutorials-link{display:inline-flex;align-items:center;gap:10px;
+                background:linear-gradient(135deg,#7c3aed,#2563eb);
+                color:#fff;text-decoration:none;padding:16px 36px;
+                border-radius:12px;font-weight:700;font-size:1rem;
+                transition:transform .15s,box-shadow .15s;position:relative;
+                box-shadow:0 0 40px rgba(124,58,237,.35)}
+.tutorials-link:hover{transform:translateY(-2px);
+                        box-shadow:0 8px 48px rgba(124,58,237,.5)}
+.tutorials-link .arrow{font-size:1.1rem;transition:transform .15s}
+.tutorials-link:hover .arrow{transform:translateX(4px)}
+
+/* ── Footer ────────────────────────────────────────────────────────────────── */
+footer{background:#0d0d12;border-top:1px solid #1e1e2e;
+       padding:40px 24px;text-align:center}
+footer .footer-logo{font-size:1.1rem;font-weight:800;
+  background:linear-gradient(135deg,#a78bfa,#60a5fa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:10px}
+footer p{color:#374151;font-size:.8rem}
+footer a{color:#4b5563;text-decoration:none}
+footer a:hover{color:#94a3b8}
+
+/* ── Misc ─────────────────────────────────────────────────────────────────── */
+.highlight{color:#a78bfa;font-weight:700;font-style:normal}
+@media(max-width:600px){
+  nav{padding:0 20px}
+  .nav-links{gap:16px}
+  .nav-links a:not(.nav-cta){display:none}
+  section{padding:64px 20px}
+  .tutorials-cta{padding:40px 24px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">Keethu</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#performance">Performance</a>
+    <a href="rust-in-keethu.html">Learn Rust</a>
+    <a href="keethu-why.html" class="nav-cta">Tutorials →</a>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span>Built in Rust · Apache-2.0</div>
+  <h1>Pub/Sub at<br>100K Scale</h1>
+  <p class="hero-sub">Keethu delivers messages to 100,000 concurrent subscribers with ≤10ms p99 latency — on a single machine. No Kafka cluster. No distributed overhead. Just physics.</p>
+  <div class="hero-actions">
+    <a href="keethu-why.html" class="btn-primary">Read the Deep-Dive →</a>
+    <a href="#features" class="btn-secondary">Explore Features</a>
+  </div>
+</div>
+
+<!-- ── Stats ─────────────────────────────────────────────────────────────────── -->
+<div class="stats">
+  <div class="stat"><span class="val">100K</span><div class="lab">Concurrent Subscribers</div></div>
+  <div class="stat"><span class="val">≤10ms</span><div class="lab">p99 Latency Target</div></div>
+  <div class="stat"><span class="val">1M+</span><div class="lab">Messages / Second</div></div>
+  <div class="stat"><span class="val">0</span><div class="lab">GC Pauses (Rust)</div></div>
+  <div class="stat"><span class="val">1</span><div class="lab">Machine. No Cluster.</div></div>
+</div>
+
+<!-- ── Features ─────────────────────────────────────────────────────────────── -->
+<section id="features" class="features">
+<div class="container">
+  <div class="section-label">Core Design</div>
+  <div class="section-title">Built for the numbers<br>that matter.</div>
+  <div class="feature-grid">
+
+    <div class="feature-card">
+      <span class="feature-icon">⚡</span>
+      <h3>Async Fan-Out Engine</h3>
+      <p>Each published message fans out to all subscribers in ~35 ns per subscriber. At 100K subscribers, the full fan-out completes in ~3.5ms — well inside the 10ms budget.</p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">🔒</span>
+      <h3>Lock-Free Subscription Registry</h3>
+      <p>Topic-to-subscriber mapping lives in a <code>DashMap</code> with 128 independent shards. Publishing to <code>/sports</code> and <code>/finance</code> simultaneously has zero lock contention.</p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">📦</span>
+      <h3>Zero-Copy Message Delivery</h3>
+      <p>Message payloads are reference-counted <code>Bytes</code> objects. Delivering to 100K subscribers clones a pointer, not data — total bytes copied: zero.</p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">🌊</span>
+      <h3>Per-Connection Back-Pressure</h3>
+      <p>Each subscriber gets its own bounded mpsc channel. Slow consumers are isolated — one lagging client never stalls the fan-out for everyone else.</p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">🔌</span>
+      <h3>Custom Binary Protocol</h3>
+      <p>A 16-byte fixed header + JSON metadata + raw payload. Parse cost: 4 integer reads. No header scanning. No ambiguity. Wire captures show <code>KEET…</code> for instant identification.</p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">🦀</span>
+      <h3>Rust + Tokio Runtime</h3>
+      <p>Tokio's work-stealing scheduler runs async tasks across all CPU cores. No GC. Deterministic memory. 100K connections on ~10MB of task state instead of 800GB of thread stacks.</p>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<!-- ── How it works ─────────────────────────────────────────────────────────── -->
+<section id="how-it-works">
+<div class="container">
+  <div class="section-label">Architecture</div>
+  <div class="section-title">How a message travels<br>from publisher to 100K subscribers.</div>
+  <div class="how">
+    <div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <h4>Publisher sends a PUBLISH frame</h4>
+            <p>16-byte binary header + JSON metadata + raw payload. Keethu decodes the header in &lt;100 ns — four integer reads, no scanning.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <h4>Atomic sequence number assigned</h4>
+            <p>A single <code>AtomicU64::fetch_add</code> stamps the message with a global sequence in ~5 ns. No mutex. No coordination.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <h4>DashMap topic lookup</h4>
+            <p>The topic string hashes to one of 128 shards. Only that shard's lock is acquired for ~20–50 ns. All other topics proceed in parallel.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-text">
+            <h4>Fan-out loop over Vec of subscribers</h4>
+            <p>Cache-friendly Vec iteration. Per subscriber: clone a <code>Bytes</code> pointer (O(1)) + <code>try_send</code> to their mpsc channel (~10 ns). Total: ~35 ns/subscriber.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-text">
+            <h4>Async write task drains channel → TCP</h4>
+            <p>Each connection's write task reads from its channel and calls <code>write_all</code>. Tokio's epoll reactor fires only when the socket is ready — no polling, no wasted cycles.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="how-diagram">
+<span class="pur">Publisher</span>
+  │
+  │  PUBLISH /sports (payload: 256B)
+  ▼
+<span class="hl">Keethu Engine</span>
+  │
+  ├─ seq = <span class="grn">fetch_add(1)</span>         <span style="color:#4b5563">~5 ns</span>
+  ├─ DashMap["/sports"]        <span style="color:#4b5563">~20 ns</span>
+  │   └─ Vec[sub_1 .. sub_N]
+  │
+  ├─ <span class="grn">fan-out loop</span>
+  │   for sub in subs {
+  │     frame = build(payload.<span class="grn">clone()</span>) <span style="color:#4b5563">O(1)</span>
+  │     sub.tx.<span class="grn">try_send</span>(frame)   <span style="color:#4b5563">~10 ns</span>
+  │   }
+  │
+  ├─ slow consumer? → <span class="red">drop + warn</span>
+  │   (others unaffected)
+  │
+  ▼
+<span class="org">Write Tasks</span> (one per connection)
+  │
+  ├─ recv from mpsc channel
+  ├─ <span class="grn">write_all</span>() → TCP socket
+  └─ Tokio epoll: <span class="grn">O(1)</span> readiness
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Use Cases ─────────────────────────────────────────────────────────────── -->
+<section id="use-cases" class="usecases">
+<div class="container">
+  <div class="section-label">Use Cases</div>
+  <div class="section-title">Built for real-time,<br>high-fan-out workloads.</div>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <h3>Market Data Feeds</h3>
+      <p>Push stock quotes, order book updates, and trade ticks to thousands of trading terminals simultaneously with deterministic latency.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Multiplayer Game Servers</h3>
+      <p>Broadcast position updates to all players in a room at 60 Hz. Each frame must reach every client within one tick — 16ms.</p>
+    </div>
+    <div class="uc-card">
+      <h3>IoT Telemetry</h3>
+      <p>Fan out sensor readings from thousands of devices to dashboards, alerting systems, and data pipelines in real time.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Live Dashboards</h3>
+      <p>Stream metrics, logs, and analytics to ops teams and monitoring systems. No polling. Push the moment data changes.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Collaborative Tools</h3>
+      <p>Sync document edits, cursor positions, and presence data between users in shared workspaces with sub-millisecond propagation.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Real-Time Auctions</h3>
+      <p>Deliver bid updates and countdown events to all participants simultaneously. Fairness requires every subscriber gets the same data at the same time.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Performance ─────────────────────────────────────────────────────────── -->
+<section id="performance">
+<div class="container">
+  <div class="section-label">Latency Budget</div>
+  <div class="section-title">Every nanosecond accounted for.</div>
+  <p class="section-body">Keethu's design is driven by a precise latency budget. Here's where the time goes on a loaded system delivering to 100K subscribers.</p>
+  <table class="perf-table">
+    <thead>
+      <tr><th>Operation</th><th>Cost</th><th>Technique</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Frame decode (16-byte header)</td><td class="green">&lt; 100 ns</td><td>4 u32 reads, no scanning</td></tr>
+      <tr><td>JSON header parse</td><td class="purple">500 ns – 2 µs</td><td>serde_json, simd-json option</td></tr>
+      <tr><td>Sequence number stamp</td><td class="green">~5 ns</td><td>AtomicU64::fetch_add (Relaxed)</td></tr>
+      <tr><td>DashMap topic lookup</td><td class="green">~20–50 ns</td><td>128-shard hash, single shard lock</td></tr>
+      <tr><td>Delivery frame build per subscriber</td><td class="purple">~200 ns</td><td>Bytes::clone is O(1)</td></tr>
+      <tr><td>try_send to mpsc per subscriber</td><td class="green">~10–20 ns</td><td>Lock-free channel push</td></tr>
+      <tr><td>Fan-out 100K subscribers (serial)</td><td class="purple">~3–5 ms</td><td>35 ns × 100K</td></tr>
+      <tr><td>TCP flush via Tokio epoll</td><td class="purple">~2–5 µs / conn</td><td>Edge-triggered, non-blocking</td></tr>
+      <tr><td><strong>Total p50 end-to-end</strong></td><td class="green"><strong>~4–6 ms</strong></td><td>LAN, fully loaded</td></tr>
+      <tr><td><strong>Total p99 target</strong></td><td class="green"><strong>≤ 10 ms</strong></td><td>Includes scheduling jitter</td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- ── Tutorials CTA ─────────────────────────────────────────────────────────── -->
+<section>
+<div class="container">
+  <div class="tutorials-cta">
+    <h2>Understand every design decision<br>from first principles.</h2>
+    <p>The deep-dive guide covers CPU cache hierarchies, OS scheduling, TCP internals, Rust's ownership model, and Tokio's work-stealing scheduler — every concept behind Keethu's architecture.</p>
+    <div class="tut-cards">
+      <div class="tut-card">
+        <div class="tut-label">Chapter 1</div>
+        <div class="tut-title">CPU & Cache Internals</div>
+      </div>
+      <div class="tut-card">
+        <div class="tut-label">Chapter 2</div>
+        <div class="tut-title">OS & epoll Deep Dive</div>
+      </div>
+      <div class="tut-card">
+        <div class="tut-label">Chapter 3</div>
+        <div class="tut-title">TCP & Zero-Copy</div>
+      </div>
+      <div class="tut-card">
+        <div class="tut-label">Chapter 4 – 6</div>
+        <div class="tut-title">Rust, Tokio & Keethu Design</div>
+      </div>
+    </div>
+    <a href="keethu-why.html" class="tutorials-link">
+      Read the Full Tutorial <span class="arrow">→</span>
+    </a>
+  </div>
+</div>
+</section>
+
+<!-- ── Rust Tutorial CTA ───────────────────────────────────────────────────── -->
+<section style="padding-top:0">
+<div class="container">
+  <div class="tutorials-cta" style="background:linear-gradient(135deg,#3b1d0a 0%,#0f172a 100%);border-color:#f97316">
+    <h2>Learn Rust in 1 day —<br>the Keethu way.</h2>
+    <p>Zero to production-quality Rust in 12 focused hours. Ownership, async, traits, macros, unsafe — every concept with real code. No prior systems experience required.</p>
+    <div class="tut-cards">
+      <div class="tut-card" style="border-color:rgba(249,115,22,.3)">
+        <div class="tut-label" style="color:#f97316">Hour 1 – 4</div>
+        <div class="tut-title">Setup · Ownership · Types · Errors</div>
+      </div>
+      <div class="tut-card" style="border-color:rgba(249,115,22,.3)">
+        <div class="tut-label" style="color:#f97316">Hour 5 – 8</div>
+        <div class="tut-title">Traits · Iterators · Closures · Smart Ptrs</div>
+      </div>
+      <div class="tut-card" style="border-color:rgba(249,115,22,.3)">
+        <div class="tut-label" style="color:#f97316">Hour 9 – 10</div>
+        <div class="tut-title">Concurrency · Async / Tokio</div>
+      </div>
+      <div class="tut-card" style="border-color:rgba(249,115,22,.3)">
+        <div class="tut-label" style="color:#f97316">Hour 11 – 12</div>
+        <div class="tut-title">Macros · Unsafe · Build a Broker</div>
+      </div>
+    </div>
+    <a href="rust-in-keethu.html" class="tutorials-link" style="background:linear-gradient(135deg,#f97316,#dc2626);box-shadow:0 0 40px rgba(249,115,22,.35)">
+      Start the Rust Tutorial <span class="arrow">→</span>
+    </a>
+  </div>
+</div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">Keethu</div>
+  <p>v0.1.0 &nbsp;·&nbsp; <a href="https://opensource.org/licenses/Apache-2.0">Apache-2.0</a> &nbsp;·&nbsp; Built with Rust, Tokio, DashMap, Axum</p>
+</footer>
+
+</body>
+</html>

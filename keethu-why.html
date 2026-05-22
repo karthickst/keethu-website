@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="From CPU caches to TCP internals to Tokio's scheduler — every concept behind Keethu's pub/sub architecture, explained from first principles.">
+<meta name="theme-color" content="#0f0f14">
+<link rel="canonical" href="https://keethu.com/keethu-why">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:title" content="Why Keethu — From First Principles to Production">
+<meta property="og:description" content="A deep dive into CPU, OS, TCP, and Rust — every design decision behind Keethu's pub/sub server.">
+<meta property="og:url" content="https://keethu.com/keethu-why">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Keethu">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Why Keethu — From First Principles to Production">
+<meta name="twitter:description" content="CPU, OS, TCP, Rust — every concept behind Keethu's architecture.">
+<title>Why Keethu — From First Principles to Production</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     background:#0f0f14;color:#e2e8f0;line-height:1.7;display:flex;min-height:100vh}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+#sidebar{width:270px;min-width:270px;background:#16161f;border-right:1px solid #2d2d3f;
+         position:sticky;top:0;height:100vh;overflow-y:auto;padding:24px 0;flex-shrink:0}
+#sidebar h2{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
+            color:#6b7280;padding:0 20px 8px;margin-bottom:4px}
+#sidebar a{display:block;padding:5px 20px;font-size:.82rem;color:#94a3b8;
+           text-decoration:none;border-left:2px solid transparent;transition:all .15s}
+#sidebar a:hover,#sidebar a.active{color:#a78bfa;border-left-color:#a78bfa;
+                                    background:rgba(167,139,250,.07)}
+#sidebar .section-group{margin-bottom:16px}
+#sidebar .chapter-label{font-size:.75rem;font-weight:700;color:#c4b5fd;
+                         padding:10px 20px 4px;display:block}
+
+/* ── Main content ─────────────────────────────────────────────────────── */
+main{flex:1;max-width:860px;padding:48px 56px;overflow-x:hidden}
+@media(max-width:900px){main{padding:24px 20px}#sidebar{display:none}}
+
+/* ── Typography ───────────────────────────────────────────────────────── */
+h1{font-size:2.6rem;font-weight:800;line-height:1.15;
+   background:linear-gradient(135deg,#a78bfa,#60a5fa);
+   -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
+h2{font-size:1.65rem;font-weight:700;color:#c4b5fd;margin:56px 0 16px;
+   padding-bottom:10px;border-bottom:1px solid #2d2d3f}
+h3{font-size:1.18rem;font-weight:600;color:#93c5fd;margin:32px 0 10px}
+h4{font-size:1rem;font-weight:600;color:#86efac;margin:20px 0 8px}
+p{margin-bottom:14px;color:#cbd5e1}
+ul,ol{margin:10px 0 14px 20px;color:#cbd5e1}
+li{margin-bottom:5px}
+strong{color:#f1f5f9}
+em{color:#fbbf24;font-style:normal;font-weight:600}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+.hero{background:linear-gradient(135deg,#1e1b4b,#0f172a);border:1px solid #3730a3;
+      border-radius:16px;padding:40px 44px;margin-bottom:48px}
+.hero .subtitle{font-size:1.05rem;color:#a5b4fc;margin-top:12px;margin-bottom:0}
+.hero .tagline{font-size:.85rem;color:#6b7280;margin-top:8px;letter-spacing:.04em}
+
+/* ── Difficulty badges ────────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;
+       font-size:.7rem;font-weight:700;letter-spacing:.06em;margin-left:10px;
+       vertical-align:middle;text-transform:uppercase}
+.novice{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+.intermediate{background:#431407;color:#fb923c;border:1px solid #7c2d12}
+.advanced{background:#4c1d95;color:#c4b5fd;border:1px solid #5b21b6}
+.pro{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
+
+/* ── Code ─────────────────────────────────────────────────────────────── */
+pre{background:#1e1e2e;border:1px solid #2d2d3f;border-radius:10px;
+    padding:20px 24px;overflow-x:auto;margin:16px 0;font-size:.82rem;line-height:1.6}
+code{background:#1e1e2e;padding:2px 7px;border-radius:5px;
+     font-family:"JetBrains Mono","Fira Code","Cascadia Code",monospace;
+     font-size:.83em;color:#e2e8f0}
+pre code{background:none;padding:0;font-size:inherit}
+.kw{color:#c084fc}.fn{color:#60a5fa}.st{color:#86efac}.cm{color:#4b5563;font-style:italic}
+.num{color:#fb923c}.ty{color:#f472b6}.op{color:#94a3b8}.hl{background:#2d2d4e}
+
+/* ── Diagrams ─────────────────────────────────────────────────────────── */
+.diagram{background:#0d1117;border:1px solid #30363d;border-radius:10px;
+         padding:20px 24px;font-family:monospace;font-size:.8rem;
+         color:#8b949e;overflow-x:auto;margin:16px 0;line-height:1.8}
+.diagram .box{color:#58a6ff}
+.diagram .arrow{color:#3fb950}
+.diagram .label{color:#f0883e}
+.diagram .hot{color:#ff7b72}
+
+/* ── Numbers callout ──────────────────────────────────────────────────── */
+.numbers{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+         gap:12px;margin:20px 0}
+.num-card{background:#1e1e2e;border:1px solid #2d2d3f;border-radius:10px;
+          padding:16px;text-align:center}
+.num-card .val{font-size:1.6rem;font-weight:800;color:#a78bfa;display:block}
+.num-card .lab{font-size:.72rem;color:#6b7280;margin-top:4px}
+
+/* ── Info / warning boxes ─────────────────────────────────────────────── */
+.info{background:#0c1a2e;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;
+      padding:14px 18px;margin:16px 0}
+.warn{background:#1c1208;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;
+      padding:14px 18px;margin:16px 0}
+.tip{background:#061c14;border-left:4px solid #10b981;border-radius:0 8px 8px 0;
+     padding:14px 18px;margin:16px 0}
+.info p,.warn p,.tip p{margin-bottom:0;font-size:.9rem}
+.info strong,.warn strong,.tip strong{display:block;margin-bottom:4px;font-size:.8rem;
+                                       text-transform:uppercase;letter-spacing:.06em}
+.info strong{color:#60a5fa}.warn strong{color:#fbbf24}.tip strong{color:#34d399}
+
+/* ── FAQ ──────────────────────────────────────────────────────────────── */
+.faq-block{margin:28px 0}
+.faq-block h3{color:#fbbf24;font-size:1rem;margin-bottom:12px}
+details{background:#16161f;border:1px solid #2d2d3f;border-radius:8px;
+        margin-bottom:8px;overflow:hidden}
+details summary{padding:12px 16px;cursor:pointer;color:#e2e8f0;font-size:.9rem;
+                font-weight:500;list-style:none;display:flex;justify-content:space-between}
+details summary::after{content:"＋";color:#a78bfa;font-size:1rem}
+details[open] summary::after{content:"－"}
+details summary::-webkit-details-marker{display:none}
+details .ans{padding:4px 16px 16px;border-top:1px solid #2d2d3f;font-size:.88rem;color:#94a3b8}
+details .ans p{color:#94a3b8;margin-bottom:8px}
+details .ans p:last-child{margin-bottom:0}
+details .ans code{font-size:.8em}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.85rem}
+th{background:#1e1e2e;color:#a78bfa;padding:10px 14px;text-align:left;
+   border-bottom:1px solid #3730a3}
+td{padding:9px 14px;border-bottom:1px solid #1e1e2e;color:#cbd5e1}
+tr:hover td{background:#16161f}
+
+/* ── Section anchor offset for sticky nav ────────────────────────────── */
+section{scroll-margin-top:24px}
+hr{border:none;border-top:1px solid #2d2d3f;margin:40px 0}
+.toc-top{font-size:.72rem;color:#4b5563;float:right;margin-top:4px}
+.toc-top a{color:#4b5563;text-decoration:none}
+.toc-top a:hover{color:#a78bfa}
+</style>
+</head>
+<body>
+
+<!-- ── Sidebar ───────────────────────────────────────────────────────────── -->
+<nav id="sidebar">
+  <h2>Keethu — Why &amp; How</h2>
+  <div class="section-group">
+    <span class="chapter-label">Introduction</span>
+    <a href="#why">Why Keethu Exists</a>
+    <a href="#problem">The 100K Problem</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 1 · Computer Architecture</span>
+    <a href="#cpu">CPU Internals</a>
+    <a href="#cache">Cache Hierarchy</a>
+    <a href="#numa">NUMA</a>
+    <a href="#simd">SIMD</a>
+    <a href="#faq-arch">FAQ: Architecture</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 2 · Operating Systems</span>
+    <a href="#processes">Processes &amp; Threads</a>
+    <a href="#syscalls">System Calls</a>
+    <a href="#io-models">I/O Models</a>
+    <a href="#epoll">epoll Deep Dive</a>
+    <a href="#memory-os">Virtual Memory</a>
+    <a href="#faq-os">FAQ: OS</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 3 · Networking</span>
+    <a href="#tcp">TCP Internals</a>
+    <a href="#buffers">Socket Buffers</a>
+    <a href="#zerocopy">Zero-Copy</a>
+    <a href="#tuning-net">Kernel Tuning</a>
+    <a href="#faq-net">FAQ: Networking</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 4 · Performance Eng.</span>
+    <a href="#latency">Latency vs Throughput</a>
+    <a href="#percentiles">Percentiles</a>
+    <a href="#lockfree">Lock-Free Programming</a>
+    <a href="#false-sharing">False Sharing</a>
+    <a href="#profiling">Profiling Tools</a>
+    <a href="#faq-perf">FAQ: Performance</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 5 · Rust &amp; Async</span>
+    <a href="#ownership">Ownership &amp; No-GC</a>
+    <a href="#async">Async / Await</a>
+    <a href="#tokio">Tokio Internals</a>
+    <a href="#bytes-crate">Zero-Copy Bytes</a>
+    <a href="#dashmap">DashMap</a>
+    <a href="#faq-rust">FAQ: Rust</a>
+  </div>
+  <div class="section-group">
+    <span class="chapter-label">Ch 6 · Keethu Design</span>
+    <a href="#wire">Wire Protocol</a>
+    <a href="#fanout">Fan-Out Engine</a>
+    <a href="#backpressure">Back-Pressure</a>
+    <a href="#keethu-numbers">Real Numbers</a>
+    <a href="#faq-keethu">FAQ: Keethu</a>
+  </div>
+</nav>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<main>
+
+<div class="hero">
+  <h1>Why Keethu</h1>
+  <p class="subtitle">A ground-up guide to computer architecture, operating systems, networking, and performance engineering — every concept you need to understand how and why Keethu is built the way it is.</p>
+  <p class="tagline">Novice → Intermediate → Advanced → Pro · With FAQs at every level</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="why">
+<h2>Why Keethu Exists</h2>
+
+<p>Modern financial systems, game servers, IoT platforms, and real-time dashboards all share one brutal requirement: <em>many clients need to receive the same data stream simultaneously, with predictable low latency</em>. A stock feed must reach 50,000 trading terminals within milliseconds of the market moving. A gaming server must push position updates to 10,000 players every 16ms.</p>
+
+<p>The naive solution — one thread per connection, each thread reading from a shared queue — collapses at scale. At 10,000 connections you have 10,000 threads. Each thread consumes ~8MB of stack by default on Linux. That's 80GB of stack memory before you've processed a single message. Context-switching 10,000 threads costs hundreds of milliseconds per cycle.</p>
+
+<p>Keethu is built to answer: <strong>how do you deliver messages to 100,000 concurrent subscribers with ≤10ms p99 latency on a single machine?</strong> Every architectural decision in Keethu exists to answer that question. This guide explains the physics behind those decisions.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="problem">
+<h2>The 100K Subscription Problem</h2>
+
+<div class="numbers">
+  <div class="num-card"><span class="val">100K</span><div class="lab">concurrent subscribers</div></div>
+  <div class="num-card"><span class="val">10ms</span><div class="lab">p99 latency target</div></div>
+  <div class="num-card"><span class="val">1M+</span><div class="lab">messages / second possible</div></div>
+  <div class="num-card"><span class="val">64B</span><div class="lab">CPU cache line size</div></div>
+</div>
+
+<p>To appreciate why this is hard, consider what happens when one publisher sends a message to 100,000 subscribers:</p>
+
+<div class="diagram">
+Publisher → Keethu Engine → [sub-1, sub-2, sub-3, ... sub-100,000]
+                                  ↓
+              Each sub gets its own TCP write buffer push
+              Each TCP write = kernel syscall = ~1µs overhead
+              100,000 × 1µs = 100ms if done serially ← FAILS the 10ms target
+
+  Solution: async fan-out + zero-copy + lock-free registry
+</div>
+
+<p>This requires understanding every layer of the stack — CPU caches, OS scheduling, TCP socket internals, and Rust's async runtime. The chapters below build that knowledge from scratch.</p>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 1</h2>
+<section id="cpu">
+<h2>CPU Internals <span class="badge novice">Novice</span></h2>
+
+<p>A modern CPU does not simply "run instructions one by one." It uses a deep pipeline to execute many instructions simultaneously, and it aggressively reorders, speculates, and caches to keep all execution units busy.</p>
+
+<h3>The Pipeline</h3>
+<p>Each instruction passes through stages: <strong>Fetch → Decode → Rename → Dispatch → Execute → Commit</strong>. Intel's Skylake CPU has a 14-19 stage pipeline. The pipeline is wide: a modern core can retire up to 4 instructions per clock cycle (superscalar execution).</p>
+
+<div class="diagram">
+Cycle:  1   2   3   4   5   6   7   8   9
+Instr1: F - D - E - W
+Instr2:     F - D - E - W
+Instr3:         F - D - E - W
+Instr4:             F - D - E - W
+
+ F=Fetch  D=Decode  E=Execute  W=Writeback
+ All four instructions complete by cycle 7 instead of cycle 16
+</div>
+
+<h3>Branch Prediction</h3>
+<p>When the CPU hits an <code>if</code> statement, it doesn't wait — it <em>predicts</em> which branch will be taken and starts executing speculatively. Modern CPUs predict correctly ~99% of the time. A misprediction flushes the pipeline (~15-20 cycles wasted). This is why tight loops with unpredictable branches are slow.</p>
+
+<div class="info"><strong>Keethu Connection</strong><p>The hot path in Keethu's fan-out loop iterates subscribers. If the subscription list is always non-empty (the common case), the branch predictor stays warm. We avoid conditional checks inside the tight loop for this reason.</p></div>
+
+<h3 id="cache">Cache Hierarchy <span class="badge novice">Novice</span></h3>
+
+<p>RAM is slow. The CPU cannot wait 70+ nanoseconds for every data fetch. So it keeps frequently-used data in progressively smaller, faster caches closer to the execution units.</p>
+
+<table>
+<thead><tr><th>Level</th><th>Size (typical)</th><th>Latency (cycles)</th><th>Latency (ns)</th><th>Bandwidth</th></tr></thead>
+<tbody>
+<tr><td>Register</td><td>~1 KB (all regs)</td><td>0</td><td>&lt;0.3 ns</td><td>—</td></tr>
+<tr><td>L1 Cache</td><td>32–64 KB / core</td><td>4–5</td><td>~1 ns</td><td>~1 TB/s</td></tr>
+<tr><td>L2 Cache</td><td>256 KB–4 MB / core</td><td>12–14</td><td>~4 ns</td><td>~400 GB/s</td></tr>
+<tr><td>L3 Cache</td><td>16–128 MB shared</td><td>40–60</td><td>~15 ns</td><td>~200 GB/s</td></tr>
+<tr><td>DDR5 RAM</td><td>GBs</td><td>~200</td><td>~70 ns</td><td>~50-100 GB/s</td></tr>
+<tr><td>NVMe SSD</td><td>TBs</td><td>~100,000</td><td>~30–100 µs</td><td>~7 GB/s</td></tr>
+</tbody>
+</table>
+
+<h4>Cache Lines</h4>
+<p>CPUs don't fetch individual bytes — they fetch a <em>cache line</em> of <strong>64 bytes</strong> at a time. If you access one byte at address X, the CPU loads bytes X through X+63 into cache. This makes sequential memory access (arrays) much faster than random access (linked lists), because the next element is already in cache.</p>
+
+<pre><code><span class="cm">// Linked list: each node is at a random address → cache miss per node</span>
+<span class="kw">struct</span> <span class="ty">Node</span> { val: u64, next: *<span class="kw">mut</span> <span class="ty">Node</span> }
+
+<span class="cm">// Vec: elements are contiguous → next element already in cache line</span>
+<span class="kw">let</span> v: <span class="ty">Vec</span>&lt;u64&gt; = <span class="fn">vec!</span>[<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, ...]; <span class="cm">// blazing fast iteration</span></code></pre>
+
+<div class="warn"><strong>Why This Matters for Keethu</strong><p>Keethu's subscription list for each topic is a <code>Vec&lt;SubEntry&gt;</code>, not a linked list. During fan-out, iterating 1,000 subscribers in a Vec is far faster than traversing a linked list — the CPU prefetcher can stream cache lines ahead of the iterator.</p></div>
+</section>
+
+<!-- ── NUMA ─────────────────────────────────────────────────────────────── -->
+<section id="numa">
+<h3>NUMA — Non-Uniform Memory Access <span class="badge intermediate">Intermediate</span></h3>
+
+<p>In a multi-socket server, each CPU socket has its own local DDR channels. Accessing memory <em>local</em> to your socket is fast (~80 ns). Accessing memory <em>on the other socket</em> crosses the interconnect (Intel UPI or AMD Infinity Fabric) and costs ~120–140 ns — 50–75% slower.</p>
+
+<div class="diagram">
+Socket 0                           Socket 1
+┌──────────────────┐   UPI    ┌──────────────────┐
+│  Cores 0-31      │ ◄──────► │  Cores 32-63     │
+│  L3 Cache 64MB   │  ~40ns   │  L3 Cache 64MB   │
+│  DDR5 256GB      │          │  DDR5 256GB      │
+└──────────────────┘          └──────────────────┘
+   Local access: ~80ns           Cross-socket: ~140ns
+</div>
+
+<p>Keethu's recommended machine spec calls for a <em>single-socket</em> AMD EPYC 9374F precisely to avoid NUMA complexity. When you must use dual-socket, you pin the Tokio runtime to socket 0's cores and allocate all memory with <code>numactl --membind=0</code>.</p>
+</section>
+
+<!-- ── SIMD ────────────────────────────────────────────────────────────── -->
+<section id="simd">
+<h3>SIMD — Single Instruction, Multiple Data <span class="badge advanced">Advanced</span></h3>
+
+<p>SIMD instructions operate on <em>vectors</em> of data simultaneously. AVX2 processes 256 bits (32 bytes) per instruction. AVX-512 processes 512 bits (64 bytes). Applied to JSON parsing — which Keethu uses for frame headers — SIMD can scan for the closing <code>}</code> brace and validate UTF-8 in 32-byte chunks instead of byte-by-byte, achieving 3-5× throughput improvement.</p>
+
+<pre><code><span class="cm">// Scalar: check one byte at a time</span>
+<span class="kw">for</span> byte <span class="kw">in</span> input { <span class="kw">if</span> byte == <span class="num">b'}'</span> { <span class="cm">/* found */</span> } }
+
+<span class="cm">// SIMD (via simd-json crate): compare 32 bytes simultaneously</span>
+<span class="cm">// _mm256_cmpeq_epi8(chunk, splat(b'}')) → bitmask of matches</span>
+<span class="cm">// 32× fewer iterations for the same input</span></code></pre>
+
+<div class="faq-block">
+<h3>📖 FAQ — Computer Architecture</h3>
+<section id="faq-arch">
+<details><summary>Why can't we just add more CPU cores to fix latency?</summary>
+<div class="ans"><p>More cores help <em>throughput</em> (more work done per second) but don't inherently reduce <em>latency</em> (time for one piece of work to complete). If a single message delivery requires acquiring a lock, the lock contention can make adding cores make things <em>worse</em> — each core spins burning CPU while waiting. Keethu uses lock-free data structures precisely so that more cores mean more fan-out parallelism with no contention penalty.</p></div>
+</details>
+<details><summary>What is a cache miss and how costly is it really?</summary>
+<div class="ans"><p>A cache miss occurs when data needed by the CPU isn't in L1/L2/L3 cache, forcing a fetch from RAM. An L1 hit takes ~1 ns. An L3 miss (RAM access) takes ~70 ns — 70× slower. In a tight loop processing 1M messages/second, each message that causes an L3 miss costs 70ns × 1M = 70ms of aggregate stall time per second. Keeping hot data structures (subscription lists, sequence counters) within L3 cache is critical for Keethu's latency targets.</p></div>
+</details>
+<details><summary>What is false sharing and how does it hurt performance?</summary>
+<div class="ans"><p>False sharing occurs when two CPU cores modify different variables that happen to reside on the <em>same 64-byte cache line</em>. Even though the variables are logically independent, the cache coherence protocol forces cores to coordinate on every write, serializing what should be parallel work. Fix: pad structs so hot independent fields live on different cache lines.</p>
+<pre><code><span class="cm">// BAD: counter_a and counter_b share a cache line</span>
+<span class="kw">struct</span> <span class="ty">Bad</span> { counter_a: <span class="ty">AtomicU64</span>, counter_b: <span class="ty">AtomicU64</span> }
+
+<span class="cm">// GOOD: each on its own cache line</span>
+<span class="kw">struct</span> <span class="ty">Good</span> {
+  counter_a: <span class="ty">AtomicU64</span>,
+  _pad: [<span class="ty">u8</span>; <span class="num">56</span>], <span class="cm">// fill to 64 bytes</span>
+  counter_b: <span class="ty">AtomicU64</span>,
+}</code></pre></div>
+</details>
+<details><summary>What is out-of-order execution?</summary>
+<div class="ans"><p>Modern CPUs don't execute instructions in the order they're written. They analyze the dependency graph between instructions and execute independent ones in parallel. If instruction 3 doesn't depend on the result of instruction 2, the CPU can start executing instruction 3 while instruction 2 is still waiting for a memory access. This is invisible to the programmer — the CPU guarantees correct results — but it means that code with fewer data dependencies is faster.</p></div>
+</details>
+</section>
+</div>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 2</h2>
+<section id="processes">
+<h2>Operating Systems — Processes &amp; Threads <span class="badge novice">Novice</span></h2>
+
+<p>An <em>operating system</em> manages hardware resources (CPU, memory, devices) and provides abstractions that programs use without knowing the hardware details. Understanding the OS is essential because Keethu lives at the boundary between user code and OS kernel.</p>
+
+<h3>Process vs Thread</h3>
+<table>
+<thead><tr><th>Concept</th><th>Process</th><th>Thread</th></tr></thead>
+<tbody>
+<tr><td>Memory space</td><td>Own virtual address space</td><td>Shared with all threads in process</td></tr>
+<tr><td>Creation cost</td><td>~1–2 ms (fork + exec)</td><td>~50–100 µs (clone syscall)</td></tr>
+<tr><td>Stack size</td><td>—</td><td>8 MB default on Linux</td></tr>
+<tr><td>Context switch</td><td>~5–10 µs (TLB flush)</td><td>~1–3 µs (no TLB flush)</td></tr>
+<tr><td>Communication</td><td>IPC (pipes, sockets, shm)</td><td>Shared memory directly</td></tr>
+</tbody>
+</table>
+
+<p>A <em>context switch</em> happens when the OS scheduler decides to pause thread A and resume thread B. It saves all of A's CPU registers to memory, loads B's registers, and (for processes) flushes the TLB (Translation Lookaside Buffer — the cache for virtual→physical memory translations). This costs time and pollutes caches.</p>
+
+<div class="warn"><strong>The Thread-per-Connection Trap</strong><p>A classic server spawns one thread per client connection. At 10,000 connections: 10,000 × 8MB stack = 80GB RAM just for stacks. The scheduler spends more time context-switching than doing real work. This is the <em>C10K problem</em>, described by Dan Kegel in 1999. Keethu uses async tasks — which have ~KB-sized state rather than MB-sized stacks — to handle 100K connections with a small fixed thread pool.</p></div>
+</section>
+
+<!-- ── Syscalls ──────────────────────────────────────────────────────────── -->
+<section id="syscalls">
+<h3>System Calls <span class="badge novice">Novice</span></h3>
+
+<p>Programs cannot directly access hardware. They must ask the OS via <em>system calls</em>. Each syscall involves:</p>
+<ol>
+  <li>Saving user registers</li>
+  <li>Switching CPU privilege level from Ring 3 (user) to Ring 0 (kernel)</li>
+  <li>Executing kernel code</li>
+  <li>Switching back to Ring 3 and restoring registers</li>
+</ol>
+
+<p>A syscall round-trip costs <strong>~100–300 ns</strong> on a modern CPU. That sounds small, but at 1M messages/second, calling <code>write()</code> once per message wastes 100–300 ms/second on syscall overhead alone — 10–30% of your latency budget gone.</p>
+
+<div class="tip"><strong>Keethu's approach</strong><p>Keethu writes to TCP sockets via Tokio's async I/O, which batches multiple writes into a single <code>write()</code> syscall wherever possible using <code>writev()</code> (scatter-gather I/O). The codec layer assembles frames into a <code>BytesMut</code> buffer before calling into the kernel.</p></div>
+</section>
+
+<!-- ── I/O Models ──────────────────────────────────────────────────────── -->
+<section id="io-models">
+<h2>I/O Models — The Road to epoll <span class="badge intermediate">Intermediate</span></h2>
+
+<p>There are four fundamental ways a program can perform I/O. Understanding the evolution explains why Keethu uses async I/O.</p>
+
+<h4>1. Blocking I/O</h4>
+<p>The thread calls <code>read(fd)</code> and sleeps until data arrives. Simple, but the thread is useless while blocked. Requires one thread per socket → the C10K disaster.</p>
+
+<h4>2. Non-Blocking I/O</h4>
+<p>Set the socket to <code>O_NONBLOCK</code>. <code>read(fd)</code> returns immediately with <code>EAGAIN</code> if no data. The thread can do other work. But now you must <em>poll</em> all sockets repeatedly to check — if you have 10,000 sockets, that's 10,000 syscalls per polling cycle. At 10ms polling interval: 10,000 syscalls × 100 ns = 1 ms wasted on polling overhead each cycle.</p>
+
+<h4>3. select / poll</h4>
+<p>Give the kernel a list of file descriptors. The kernel wakes you when any of them are ready. <code>select</code> is limited to 1,024 FDs. <code>poll</code> is unlimited but passes the entire FD list to the kernel on each call — O(n) per call. Still O(n) overhead as connections grow.</p>
+
+<h4>4. epoll — O(1) I/O Multiplexing <span class="badge intermediate">Intermediate</span></h4>
+<section id="epoll">
+<p><code>epoll</code> (Linux ≥2.5.44) solves the O(n) problem. You register interest in FDs once. The kernel maintains a ready list. When an FD becomes readable/writable, the kernel adds it to the ready list. <code>epoll_wait()</code> returns only the ready FDs — O(1) regardless of total connection count.</p>
+
+<div class="diagram">
+<span class="cm">Traditional poll: on each call, scan all FDs</span>
+poll([fd1, fd2, ..., fd100000], timeout)  <span class="hot">← copies 100K FDs to kernel every call</span>
+
+<span class="cm">epoll: register once, get notifications</span>
+epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &amp;event)  <span class="arrow">← once per connection</span>
+epoll_wait(epfd, events, maxevents, timeout) <span class="arrow">← returns ONLY ready FDs</span>
+</div>
+
+<h4>Edge-Triggered vs Level-Triggered</h4>
+<p>epoll has two modes. <em>Level-triggered (LT)</em>: epoll_wait keeps returning an FD as long as it's ready. <em>Edge-triggered (ET)</em>: epoll_wait fires only when the state <em>changes</em> (new data arrives). ET is more efficient but requires you to read all available data in one shot (use a loop until <code>EAGAIN</code>).</p>
+
+<p>Tokio uses epoll in edge-triggered mode internally. This is one reason Tokio can handle 100K connections on a single thread efficiently.</p>
+</section>
+</section>
+
+<!-- ── Virtual Memory ──────────────────────────────────────────────────── -->
+<section id="memory-os">
+<h3>Virtual Memory &amp; Huge Pages <span class="badge intermediate">Intermediate</span></h3>
+
+<p>The OS gives each process the illusion of a flat 64-bit address space. Physical RAM is sliced into 4KB <em>pages</em>. The CPU's MMU (Memory Management Unit) translates virtual addresses to physical addresses using a <em>page table</em>. The TLB caches recent translations.</p>
+
+<p>With 4KB pages: to address 128GB of RAM, you need 128GB / 4KB = 32 million page table entries. A TLB miss requires walking this tree — 3–5 memory accesses, 150–400 ns. With <em>huge pages</em> (2MB), you need only 65,536 entries — 512× fewer TLB misses.</p>
+
+<pre><code><span class="cm"># Enable transparent huge pages for Keethu process</span>
+echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+<span class="cm"># In Rust: hint the allocator to use huge pages for large buffers</span>
+madvise(ptr, size, MADV_HUGEPAGE)</code></pre>
+
+<div class="faq-block">
+<h3>📖 FAQ — Operating Systems</h3>
+<section id="faq-os">
+<details><summary>How does async/await avoid the thread-per-connection problem?</summary>
+<div class="ans"><p>An async task is implemented as a state machine compiled by the Rust compiler. Instead of a thread (8MB stack), an async task stores only the variables that survive across <code>await</code> points — typically a few hundred bytes. 100,000 async tasks cost ~10MB of state, not 800GB of stack. The Tokio runtime runs these tasks on a small pool of OS threads (typically one per CPU core), using epoll to know which tasks have I/O ready.</p></div>
+</details>
+<details><summary>What is a file descriptor and why is the default limit only 1,024?</summary>
+<div class="ans"><p>A file descriptor (FD) is a small integer the kernel assigns to represent an open file, socket, pipe, or device. The default per-process limit (<code>ulimit -n</code>) is 1,024 for historical reasons (it fit in a 32-bit bitmask used by the original <code>select()</code> call). For Keethu with 100K connections, you must set <code>ulimit -n 1048576</code> and <code>fs.file-max = 2000000</code> in sysctl. Each TCP connection consumes two FDs (one for the socket, one internally).</p></div>
+</details>
+<details><summary>What is the difference between a kernel thread and a green thread?</summary>
+<div class="ans"><p>A <em>kernel thread</em> is managed by the OS scheduler — it has an 8MB stack, appears in <code>ps</code>, and is preemptively scheduled. A <em>green thread</em> (or async task) is managed by a user-space runtime (like Tokio) — it has a tiny state machine instead of a stack, is cooperatively scheduled (it yields at <code>await</code> points), and the OS doesn't know it exists. Tokio uses M:N threading: M async tasks multiplexed onto N kernel threads (N ≈ CPU core count).</p></div>
+</details>
+<details><summary>Why does mmap help for large data, and when should you avoid it?</summary>
+<div class="ans"><p><code>mmap</code> maps a file directly into your process's virtual address space. Reads/writes go directly to the page cache — no <code>read()</code>/<code>write()</code> syscall overhead. This works great for large sequential reads (SOW replay in Keethu). However, <code>mmap</code> access can trigger page faults (OS loading a 4KB page from disk) at unpredictable times, causing latency spikes. For latency-sensitive paths, pre-fault pages with <code>madvise(MADV_WILLNEED)</code>.</p></div>
+</details>
+</section>
+</div>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 3</h2>
+<section id="tcp">
+<h2>Networking — TCP Internals <span class="badge novice">Novice</span></h2>
+
+<p>Keethu communicates over TCP. Understanding TCP's machinery explains every sysctl we tune and every latency spike we work around.</p>
+
+<h3>The Three-Way Handshake</h3>
+<div class="diagram">
+Client                    Server
+  │──── SYN ────────────►│   Client sends: "I want to connect, seq=X"
+  │◄─── SYN-ACK ─────────│   Server: "OK, seq=Y, ack=X+1"
+  │──── ACK ────────────►│   Client: "ack=Y+1"
+  │                       │
+  │  Connection ESTABLISHED│
+  │  Round-trip time: 1 RTT│
+</div>
+
+<p>A TCP connection requires one round-trip before any data flows. On a LAN, RTT ≈ 0.1ms. Keethu clients connect once and maintain persistent connections — this one-time cost is amortized over millions of messages.</p>
+
+<h3>Nagle's Algorithm — The Silent Latency Killer</h3>
+<p>Nagle's algorithm (enabled by default) coalesces small TCP writes. If you call <code>write()</code> with 10 bytes, Nagle may wait up to 200ms for more data to accumulate before actually sending the packet. This devastates interactive, low-latency protocols.</p>
+
+<pre><code><span class="cm">// Keethu disables Nagle immediately on accept</span>
+stream.<span class="fn">set_nodelay</span>(<span class="kw">true</span>)?; <span class="cm">// TCP_NODELAY: send immediately, don't wait</span></code></pre>
+
+<h3 id="buffers">Socket Buffers <span class="badge intermediate">Intermediate</span></h3>
+<p>Every TCP socket has two kernel buffers: a <em>send buffer</em> (data waiting to be transmitted) and a <em>receive buffer</em> (data received but not yet read by the application). These buffers live in kernel memory.</p>
+
+<div class="diagram">
+Application                  Kernel                     Network
+    │                   ┌──────────────┐
+    │──write(data)──►   │ Send Buffer  │──TCP segments──► wire
+    │                   │   (128KB)    │
+    │                   └──────────────┘
+    │                   ┌──────────────┐
+    │◄──read(data)──    │ Recv Buffer  │◄─TCP segments─── wire
+    │                   │   (128KB)    │
+    │                   └──────────────┘
+</div>
+
+<p>If the send buffer is full (slow consumer, network congestion), <code>write()</code> blocks (or returns <code>EAGAIN</code> for non-blocking). This is <em>back-pressure</em> — the OS is telling you to slow down. Keethu's per-connection mpsc channel adds another layer of back-pressure before data even reaches the socket.</p>
+
+<h4>Tuning Buffer Sizes</h4>
+<pre><code><span class="cm"># Keethu recommended sysctl settings</span>
+net.core.rmem_max = 134217728        <span class="cm"># max receive buffer: 128MB</span>
+net.core.wmem_max = 134217728        <span class="cm"># max send buffer: 128MB</span>
+net.ipv4.tcp_rmem = 4096 16384 131072  <span class="cm"># min/default/max per socket</span>
+net.ipv4.tcp_wmem = 4096 16384 131072
+net.core.somaxconn = 65536           <span class="cm"># backlog for listen()</span>
+net.ipv4.tcp_max_syn_backlog = 65536 <span class="cm"># SYN queue depth</span></code></pre>
+</section>
+
+<!-- ── Zero-Copy ────────────────────────────────────────────────────────── -->
+<section id="zerocopy">
+<h3>Zero-Copy Networking <span class="badge advanced">Advanced</span></h3>
+
+<p>In the traditional path, sending data copies it <em>four times</em>:</p>
+<ol>
+  <li>Application buffer → kernel page cache (<code>read()</code>)</li>
+  <li>Kernel page cache → socket send buffer (<code>write()</code>)</li>
+  <li>Socket send buffer → NIC DMA buffer</li>
+  <li>NIC DMA buffer → wire</li>
+</ol>
+
+<p>Zero-copy techniques eliminate intermediate copies. <code>sendfile()</code> lets the kernel copy from page cache directly to NIC — bypassing user space entirely. For Keethu's in-memory pub/sub, <em>reference counting</em> is the zero-copy technique: the payload <code>Bytes</code> object is shared among all subscribers via an <code>Arc</code>, no copying.</p>
+
+<pre><code><span class="cm">// Keethu publish: payload is cloned zero-copy via Bytes reference counting</span>
+<span class="kw">pub fn</span> <span class="fn">publish</span>(&amp;self, topic: &amp;<span class="ty">str</span>, payload: <span class="ty">Bytes</span>, publisher: &amp;<span class="ty">str</span>) {
+    <span class="kw">for</span> sub <span class="kw">in</span> subs.<span class="fn">iter</span>() {
+        <span class="kw">let</span> frame = <span class="fn">delivery_frame</span>(&amp;sub.sub_id, topic, &amp;payload, ...);
+        <span class="cm">// payload.clone() is O(1) — just increments a reference count</span>
+        <span class="cm">// no data is copied until the last Arc is dropped</span>
+        sub.tx.<span class="fn">try_send</span>(frame);
+    }
+}</code></pre>
+</section>
+
+<!-- ── Kernel Tuning ────────────────────────────────────────────────────── -->
+<section id="tuning-net">
+<h3>Kernel Network Tuning <span class="badge advanced">Advanced</span></h3>
+
+<table>
+<thead><tr><th>sysctl parameter</th><th>What it controls</th><th>Keethu value</th></tr></thead>
+<tbody>
+<tr><td><code>net.ipv4.tcp_tw_reuse</code></td><td>Reuse TIME_WAIT sockets for new connections</td><td>1</td></tr>
+<tr><td><code>net.ipv4.tcp_fin_timeout</code></td><td>How long FIN_WAIT_2 state lingers</td><td>10s</td></tr>
+<tr><td><code>net.core.netdev_max_backlog</code></td><td>Packets queued before kernel drops them</td><td>30,000</td></tr>
+<tr><td><code>fs.file-max</code></td><td>System-wide FD limit</td><td>2,000,000</td></tr>
+<tr><td><code>vm.swappiness</code></td><td>Kernel's eagerness to swap RAM to disk</td><td>1 (almost never)</td></tr>
+<tr><td><code>kernel.numa_balancing</code></td><td>Auto-migrate pages between NUMA nodes</td><td>0 (disable)</td></tr>
+</tbody>
+</table>
+
+<h4>TIME_WAIT Explained</h4>
+<p>When a TCP connection closes, the closing side enters <code>TIME_WAIT</code> for 2×MSL (~60–120 seconds) to ensure the final ACK was received. With 100K connections/hour connecting and disconnecting, you could accumulate thousands of TIME_WAIT sockets. <code>tcp_tw_reuse=1</code> allows reusing these for new outbound connections after 1 second.</p>
+
+<div class="faq-block">
+<h3>📖 FAQ — Networking</h3>
+<section id="faq-net">
+<details><summary>Why does TCP have a "slow start" and how does it affect pub/sub?</summary>
+<div class="ans"><p>TCP's slow start algorithm begins each connection (and after idle) with a small congestion window (10 packets ≈ 14KB). It doubles every RTT until it hits the congestion threshold or packet loss. For a client subscribing and then immediately receiving a burst of messages, the first few hundred milliseconds may be rate-limited by slow start. Persistent connections (keep-alive) avoid this — Keethu clients connect once and stay connected, so slow start only affects the initial handshake, not message delivery.</p></div>
+</details>
+<details><summary>What is RSS (Receive Side Scaling) and why does Keethu enable it?</summary>
+<div class="ans"><p>By default, a NIC handles all incoming packets on a single CPU core — a bottleneck at high packet rates. RSS distributes incoming connections across multiple CPU cores based on a hash of (src IP, src port, dst IP, dst port). Each core processes its own subset of connections independently, with no lock contention. Keethu's machine spec recommends configuring RSS queues equal to the number of CPU cores used by Tokio: <code>ethtool -L eth0 combined $(nproc)</code>.</p></div>
+</details>
+<details><summary>What is the difference between TCP_NODELAY and TCP_CORK?</summary>
+<div class="ans"><p><code>TCP_NODELAY</code> disables Nagle's algorithm — each write is sent immediately as its own packet. <code>TCP_CORK</code> is the opposite: hold all data until either the buffer is full (MSS bytes) or the cork is removed. Use TCP_CORK when you're assembling a response from multiple <code>write()</code> calls and want them sent as one packet. Keethu uses TCP_NODELAY on all client sockets; it assembles complete frames before writing, so Nagle-style coalescing is unnecessary and harmful.</p></div>
+</details>
+<details><summary>What happens when a subscriber is too slow to consume messages?</summary>
+<div class="ans"><p>The chain is: Keethu's mpsc channel fills up → <code>try_send()</code> returns <code>Err(Full)</code> → Keethu logs "slow consumer" and drops the message. The subscriber's TCP receive buffer may also fill up → the OS stops ACKing → TCP's receive window shrinks to zero → the sender (Keethu) cannot push more data into the socket → back-pressure propagates all the way up. Keethu's design choice is to drop messages for slow consumers rather than let one slow subscriber stall all others.</p></div>
+</details>
+</section>
+</div>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 4</h2>
+<section id="latency">
+<h2>Performance Engineering <span class="badge intermediate">Intermediate</span></h2>
+
+<h3>Latency vs Throughput — Not the Same Thing</h3>
+<p><em>Latency</em> is how long one operation takes end-to-end — measured in nanoseconds to milliseconds. <em>Throughput</em> is how many operations the system completes per second. These are related, but they pull in opposite directions: the technique that maximises one often hurts the other.</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0">
+
+  <div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:10px;padding:20px">
+    <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                color:#60a5fa;margin-bottom:10px">Throughput Optimisation</div>
+    <p style="font-size:.88rem;color:#94a3b8;margin-bottom:12px">
+      The goal is to move as many bytes as possible per second. The main cost is syscall overhead — each <code>write()</code> into the kernel takes ~100–300 ns regardless of payload size.
+    </p>
+    <div style="background:#0d1117;border-radius:6px;padding:12px;font-family:monospace;font-size:.78rem;color:#8b949e;margin-bottom:12px">
+      Accumulate 64 KB in a buffer<br>
+      → one <code>write()</code> syscall<br>
+      → kernel sends one large TCP segment<br>
+      → <span style="color:#3fb950">high msg/sec ✓</span>  <span style="color:#ff7b72">higher latency ✗</span>
+    </div>
+    <p style="font-size:.82rem;color:#6b7280;margin:0">
+      <strong style="color:#60a5fa">Trade-off:</strong> data sits in the buffer waiting for it to fill up. A message may wait milliseconds before it's flushed — unacceptable for real-time delivery.
+    </p>
+  </div>
+
+  <div style="background:#1c1208;border:1px solid #5f3d08;border-radius:10px;padding:20px">
+    <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                color:#fbbf24;margin-bottom:10px">Latency Optimisation</div>
+    <p style="font-size:.88rem;color:#94a3b8;margin-bottom:12px">
+      The goal is to deliver each message as fast as possible. Write to the socket the moment a frame is ready — never wait.
+    </p>
+    <div style="background:#0d1117;border-radius:6px;padding:12px;font-family:monospace;font-size:.78rem;color:#8b949e;margin-bottom:12px">
+      Frame ready → <code>write()</code> immediately<br>
+      → kernel sends small TCP segment<br>
+      → subscriber receives it right away<br>
+      → <span style="color:#3fb950">low latency ✓</span>  <span style="color:#ff7b72">fewer msg/sec ✗</span>
+    </div>
+    <p style="font-size:.82rem;color:#6b7280;margin:0">
+      <strong style="color:#fbbf24">Trade-off:</strong> one syscall per message. At 1 M messages/sec that's 100–300 ms/sec wasted on syscall overhead alone — 10–30% of your CPU budget gone.
+    </p>
+  </div>
+
+</div>
+
+<div class="tip">
+  <strong>Keethu's Solution — Async Pipeline</strong>
+  <p>Keethu must achieve both simultaneously: <em>≤10 ms p99 latency</em> and <em>1 M+ messages/second</em> throughput. The key insight is to <strong>never block at the application layer, but let the OS batch at the kernel layer</strong>.</p>
+  <p style="margin-top:8px">Each subscriber has a bounded async mpsc channel. The fan-out loop pushes frames into channels with a non-blocking <code>try_send()</code> (~10 ns each). A separate async write task drains the channel and calls <code>writev()</code> — scatter-gather I/O that lets the kernel coalesce multiple frames into one syscall automatically, without adding artificial delay. The frames leave as fast as the socket allows, not as fast as the buffer fills.</p>
+</div>
+
+<h4>Little's Law</h4>
+<p>A fundamental theorem of queuing theory: <strong>L = λW</strong>. The average number of items in a system (L) equals the arrival rate (λ) times the average time each item spends in the system (W). If 100,000 messages/second arrive and each takes 10ms to process: L = 100,000 × 0.01 = 1,000 messages in-flight at any time. Your in-flight buffer must be sized accordingly.</p>
+</section>
+
+<!-- ── Percentiles ──────────────────────────────────────────────────────── -->
+<section id="percentiles">
+<h3>Percentiles — Why p99 Matters More Than Mean <span class="badge intermediate">Intermediate</span></h3>
+
+<p>Average latency is nearly meaningless for real systems. A system that handles 99% of requests in 1ms but 1% in 10 seconds has an "average" of ~100ms — but users experience the 10-second tail. For Keethu with 100K subscribers, 1% of 100K = 1,000 subscribers experiencing bad latency simultaneously.</p>
+
+<table>
+<thead><tr><th>Percentile</th><th>Meaning</th><th>When it matters</th></tr></thead>
+<tbody>
+<tr><td>p50 (median)</td><td>Half of requests faster than this</td><td>Typical user experience</td></tr>
+<tr><td>p95</td><td>95% of requests faster than this</td><td>Most users</td></tr>
+<tr><td>p99</td><td>99% of requests faster than this</td><td>SLA target (Keethu: 10ms)</td></tr>
+<tr><td>p99.9</td><td>999 in 1,000 faster than this</td><td>High-frequency trading</td></tr>
+<tr><td>p99.99</td><td>9,999 in 10,000 faster than this</td><td>Five nines availability</td></tr>
+</tbody>
+</table>
+
+<p>Latency spikes — the outliers that inflate your p99 — each have a distinct root cause. Here is what each one means in plain terms, and how Keethu addresses it.</p>
+
+<div style="display:flex;flex-direction:column;gap:12px;margin:20px 0">
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#064e3b;color:#6ee7b7;border:1px solid #065f46;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Eliminated by Rust</span>
+      <span style="font-weight:700;color:#f1f5f9">Garbage Collection Pauses</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      In Java or Go, a GC thread periodically <em>stops every other thread</em> to find and free unused memory — like stopping a highway to sweep it. For 10–200 ms the server does nothing. Every subscriber waiting for a message just… waits. Rust has no GC: memory is freed deterministically the instant its owner goes out of scope. No sweeper, no pause, ever.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#1e1b4b;color:#a5b4fc;border:1px solid #3730a3;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by Tokio</span>
+      <span style="font-weight:700;color:#f1f5f9">OS Scheduler Jitter</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      The OS scheduler gives each thread a time slice — typically 1–4 ms — then forcibly pauses it to let another thread run, even if the first thread had urgent work. Imagine a chef being told to stop mid-sentence every few seconds so the dishwasher can speak. Tokio keeps just <em>one thread per CPU core</em>, so the OS almost never needs to preempt them. Fewer threads = far less scheduler jitter.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#1c1208;color:#fb923c;border:1px solid #7c2d12;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by TCP_NODELAY</span>
+      <span style="font-weight:700;color:#f1f5f9">TCP Retransmissions</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      If a network packet is lost (a router drops it under load), TCP waits for a timeout — typically 200 ms — before resending. The subscriber receives nothing during that window. Keethu runs on a LAN where packet loss is rare (&lt;0.01%), and persistent keep-alive connections avoid the slow-start retransmission burst that cold connections suffer. For the rare retransmission event, Keethu's mpsc buffer absorbs the gap so other subscribers aren't affected.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#1e1b4b;color:#a5b4fc;border:1px solid #3730a3;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by DashMap + Atomics</span>
+      <span style="font-weight:700;color:#f1f5f9">Lock Contention</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      A mutex is like a single-stall bathroom: only one person at a time. When 32 CPU cores all try to publish at once through a <code>Mutex&lt;HashMap&gt;</code>, 31 cores are just standing in line. Each wait can cost 1–5 µs — at a million operations per second that's your entire latency budget gone. Keethu uses DashMap (128 independent shards) and atomic operations so cores almost never share a lock.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#1c1208;color:#fb923c;border:1px solid #7c2d12;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by madvise / huge pages</span>
+      <span style="font-weight:700;color:#f1f5f9">Page Faults</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      Virtual memory is divided into 4 KB pages. The first time your code touches a new page — even one you just allocated — the OS must wire it to real RAM, a process called a page fault. It costs 1–10 µs and happens at an unpredictable moment. Keethu pre-faults its large buffers at startup with <code>madvise(MADV_WILLNEED)</code> and uses huge pages (2 MB) to need 512× fewer TLB lookups, keeping the hot path page-fault-free.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#1e1b4b;color:#a5b4fc;border:1px solid #3730a3;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by single-socket spec</span>
+      <span style="font-weight:700;color:#f1f5f9">NUMA Remote Accesses</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      In a two-CPU server, each processor has its own RAM bank. If CPU 0 needs data that was allocated in CPU 1's RAM, it must cross the interconnect — adding ~60 ns compared to a local read. That's 60× slower than an L1 cache hit. Keethu's recommended machine is a single-socket AMD EPYC, so all cores share one memory pool. If dual-socket is unavoidable, <code>numactl --membind=0</code> forces all allocations to socket 0.
+    </p>
+  </div>
+
+  <div style="background:#16161f;border:1px solid #2d2d3f;border-radius:10px;padding:18px 20px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+      <span style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                  background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;
+                  padding:2px 8px;border-radius:20px;white-space:nowrap">Mitigated by CPU pinning / cooling</span>
+      <span style="font-weight:700;color:#f1f5f9">Thermal Throttling</span>
+    </div>
+    <p style="font-size:.88rem;color:#94a3b8;margin:0">
+      When a CPU core overheats it automatically slows its clock — a 3.8 GHz core may drop to 2.4 GHz or lower. Instructions that took 0.26 ns now take 0.42 ns; over millions of operations the cumulative delay is measurable. Keethu's ops guide recommends dedicated server hardware with adequate cooling, disabling "Turbo Boost" (which causes clock-speed swings), and monitoring core temperatures with <code>sensors</code> before load-testing.
+    </p>
+  </div>
+
+</div>
+</section>
+
+<!-- ── Lock-Free ────────────────────────────────────────────────────────── -->
+<section id="lockfree">
+<h3>Lock-Free Programming <span class="badge advanced">Advanced</span></h3>
+
+<p>A <em>mutex</em> (mutual exclusion lock) allows only one thread to access shared data at a time. When thread A holds the lock and thread B wants it, thread B is suspended by the OS. When A releases, the OS must wake B — this context switch costs ~1–5µs. At 1M operations/second, lock contention can cost 10–50% of your entire time budget.</p>
+
+<h4>Atomic Operations</h4>
+<p>CPU instructions like <em>Compare-And-Swap (CAS)</em> and <em>Fetch-And-Add (FAA)</em> operate on a single memory location atomically without a mutex. They use CPU-level locking (cache line lock) which takes ~5–20 ns instead of ~1–5µs.</p>
+
+<pre><code><span class="cm">// Keethu's global sequence counter — no mutex needed</span>
+<span class="kw">pub</span> seq: <span class="ty">AtomicU64</span>,
+
+<span class="cm">// fetch_add is a single atomic CPU instruction (LOCK XADD on x86)</span>
+<span class="kw">let</span> seq = self.seq.<span class="fn">fetch_add</span>(<span class="num">1</span>, <span class="ty">Ordering</span>::Relaxed); <span class="cm">// ~5 ns</span>
+<span class="cm">// vs: Mutex::lock() → ~1000 ns under contention</span></code></pre>
+
+<h4>Memory Ordering</h4>
+<p>CPUs and compilers reorder operations for performance. Atomic operations with <em>memory ordering</em> control this:</p>
+<ul>
+  <li><code>Relaxed</code>: no ordering guarantees — just atomicity. Use for counters where stale reads are acceptable.</li>
+  <li><code>Acquire</code>: all subsequent reads/writes happen <em>after</em> this load.</li>
+  <li><code>Release</code>: all prior reads/writes happen <em>before</em> this store.</li>
+  <li><code>SeqCst</code>: full sequential consistency — strongest, most expensive.</li>
+</ul>
+
+<p>Keethu uses <code>Relaxed</code> ordering for the connection counter (<code>conn_count</code>) because seeing a slightly stale value in admin stats is fine. It uses stronger ordering for subscription state changes where consistency matters.</p>
+
+<h4>DashMap — Sharded Lock-Free HashMap</h4>
+<p>A <code>Mutex&lt;HashMap&gt;</code> serializes all reads and writes. DashMap shards the hash map into N buckets (default: 4× CPU count), each with its own <code>RwLock</code>. Operations on different keys rarely hit the same shard, dramatically reducing contention.</p>
+
+<pre><code><span class="cm">// Standard: all operations serialize through one lock</span>
+<span class="ty">Mutex</span>&lt;<span class="ty">HashMap</span>&lt;<span class="ty">String</span>, <span class="ty">Vec</span>&lt;<span class="ty">Sub</span>&gt;&gt;&gt;
+
+<span class="cm">// DashMap: 64 shards, each with its own RwLock</span>
+<span class="cm">// "/sports" and "/finance" topics → different shards → no contention</span>
+<span class="ty">DashMap</span>&lt;<span class="ty">String</span>, <span class="ty">Vec</span>&lt;<span class="ty">SubEntry</span>&gt;&gt;</code></pre>
+</section>
+
+<!-- ── False Sharing ────────────────────────────────────────────────────── -->
+<section id="false-sharing">
+<h3>False Sharing <span class="badge advanced">Advanced</span></h3>
+
+<p>Two atomic counters that logically have nothing to do with each other can fight over the same CPU cache line, serializing what should be independent operations. The fix is padding.</p>
+
+<pre><code><span class="cm">// Without padding: conn_count and seq are likely on the same cache line</span>
+<span class="kw">pub struct</span> <span class="ty">Engine</span> {
+    seq:        <span class="ty">AtomicU64</span>,  <span class="cm">// 8 bytes</span>
+    conn_count: <span class="ty">AtomicU64</span>,  <span class="cm">// 8 bytes — same 64-byte cache line!</span>
+}
+<span class="cm">// Core 0 writes seq, Core 1 writes conn_count → cache line ping-pong</span>
+
+<span class="cm">// With padding: each counter on its own cache line</span>
+<span class="kw">pub struct</span> <span class="ty">Counter</span> {
+    val: <span class="ty">AtomicU64</span>,
+    _pad: [<span class="ty">u8</span>; <span class="num">56</span>], <span class="cm">// 8 + 56 = 64 bytes = one full cache line</span>
+}</code></pre>
+</section>
+
+<!-- ── Profiling ────────────────────────────────────────────────────────── -->
+<section id="profiling">
+<h3>Profiling Tools <span class="badge advanced">Advanced</span></h3>
+
+<table>
+<thead><tr><th>Tool</th><th>What it measures</th><th>Usage</th></tr></thead>
+<tbody>
+<tr><td><code>perf stat</code></td><td>CPU counters: cycles, cache-misses, IPC</td><td><code>perf stat ./keethu-server</code></td></tr>
+<tr><td><code>perf record + flamegraph</code></td><td>CPU time per function (sampling)</td><td>Visualize hot paths</td></tr>
+<tr><td><code>strace</code></td><td>System calls made</td><td><code>strace -c -p &lt;pid&gt;</code></td></tr>
+<tr><td><code>ss -s</code></td><td>Socket statistics, buffer usage</td><td>Monitor TCP state</td></tr>
+<tr><td><code>numastat</code></td><td>NUMA allocation statistics</td><td>Detect cross-socket access</td></tr>
+<tr><td><code>valgrind --tool=cachegrind</code></td><td>Cache miss simulation</td><td>Optimize data structures</td></tr>
+<tr><td><code>cargo flamegraph</code></td><td>Rust-native flamegraphs</td><td><code>cargo flamegraph -p keethu-server</code></td></tr>
+</tbody>
+</table>
+
+<div class="faq-block">
+<h3>📖 FAQ — Performance Engineering</h3>
+<section id="faq-perf">
+<details><summary>How do you measure p99 latency accurately?</summary>
+<div class="ans"><p>Use an HDR (High Dynamic Range) histogram, which uses compressed logarithmic buckets to accurately represent latency distributions from 1µs to 1 hour in a single data structure with ~2% error. <code>hdrhistogram</code> is the Rust crate. Record a timestamp when a message enters Keethu and when it's delivered to the subscriber, compute the difference. Run for at least 60 seconds at target load before reading percentiles — the first seconds include JIT warm-up effects (Tokio's work-stealing scheduler needs to warm up).</p></div>
+</details>
+<details><summary>What causes "coordinated omission" in benchmarks and why is it dangerous?</summary>
+<div class="ans"><p>Coordinated omission: when your benchmark only sends the next request after the previous one completes, it never sees the queuing delay that real clients experience. If the server is slow, the benchmark naturally slows down — hiding the problem. Fix: use a load generator that sends requests at a fixed rate (e.g., with a timer), regardless of whether previous responses arrived. <code>wrk2</code> and <code>bombardier</code> handle this correctly.</p></div>
+</details>
+<details><summary>Why is jemalloc faster than the default glibc allocator?</summary>
+<div class="ans"><p>glibc's malloc uses a global arena with a coarse lock. Under concurrent allocation from many threads, threads contend on this lock. jemalloc uses per-thread arenas (no sharing, no locks for common allocations) and size-class segregation (different pools for 8-byte, 16-byte, 32-byte objects, etc.) which reduces fragmentation. For Keethu, every incoming frame allocates a <code>BytesMut</code>; under high concurrency, jemalloc reduces allocation latency by 3-10×. Enable with: <code>#[global_allocator] static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;</code></p></div>
+</details>
+</section>
+</div>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 5</h2>
+<section id="ownership">
+<h2>Rust &amp; Async — Why Rust for Keethu <span class="badge intermediate">Intermediate</span></h2>
+
+<p>Rust makes one crucial promise: <em>no garbage collector</em>. GC languages (Java, Go, Python) periodically pause all threads to reclaim memory. A 50ms GC pause in a Java message broker means every subscriber waited 50ms — that's 5× the entire p99 latency budget. Rust's ownership system eliminates GC entirely by tracking at compile time exactly when memory can be freed.</p>
+
+<h3>Ownership in One Paragraph</h3>
+<p>Every value has exactly one <em>owner</em>. When the owner goes out of scope, the value is freed — deterministically, with no GC pause. You can <em>borrow</em> a value temporarily (references) but the compiler enforces that you can't hold a reference after the value is freed. This eliminates an entire class of bugs (use-after-free, dangling pointers) and eliminates GC.</p>
+
+<pre><code><span class="kw">let</span> payload = <span class="ty">Bytes</span>::<span class="fn">from</span>(<span class="st">"hello"</span>);
+<span class="kw">let</span> a = payload.<span class="fn">clone</span>(); <span class="cm">// O(1): clone increments ref count</span>
+<span class="kw">let</span> b = payload.<span class="fn">clone</span>(); <span class="cm">// O(1): another ref</span>
+<span class="cm">// payload, a, b all share the same buffer</span>
+<span class="cm">// Memory freed when ALL of them go out of scope</span>
+<span class="cm">// No GC. No pause. Deterministic. </span></code></pre>
+</section>
+
+<!-- ── Async/Await ──────────────────────────────────────────────────────── -->
+<section id="async">
+<h3>Async / Await — State Machine Compilation <span class="badge intermediate">Intermediate</span></h3>
+
+<p>When you write <code>async fn</code>, the Rust compiler transforms it into a state machine. Each <code>.await</code> becomes a state transition point. The state machine stores only what's needed across that suspension point.</p>
+
+<pre><code><span class="cm">// What you write:</span>
+<span class="kw">async fn</span> <span class="fn">handle_client</span>(stream: <span class="ty">TcpStream</span>) {
+    <span class="kw">let</span> frame = stream.<span class="fn">read_frame</span>().<span class="kw">await</span>; <span class="cm">// suspend here until data arrives</span>
+    <span class="fn">process</span>(frame);
+    stream.<span class="fn">write</span>(response).<span class="kw">await</span>;         <span class="cm">// suspend here until write completes</span>
+}
+
+<span class="cm">// What the compiler generates (simplified):</span>
+<span class="kw">enum</span> <span class="ty">HandleClientState</span> {
+    ReadingFrame { stream: <span class="ty">TcpStream</span> },
+    Processing  { stream: <span class="ty">TcpStream</span>, frame: <span class="ty">Frame</span> },
+    Writing     { stream: <span class="ty">TcpStream</span> },
+    Done,
+}
+<span class="cm">// This enum is ~few hundred bytes — not 8MB like a thread stack</span></code></pre>
+</section>
+
+<!-- ── Tokio ────────────────────────────────────────────────────────────── -->
+<section id="tokio">
+<h3>Tokio Internals — Work-Stealing Scheduler <span class="badge advanced">Advanced</span></h3>
+
+<p>Tokio is Keethu's async runtime. It manages:</p>
+<ul>
+  <li><strong>Worker threads</strong>: one per CPU core, each with a local task queue</li>
+  <li><strong>I/O reactor</strong>: a thread managing an epoll instance, waking tasks when their sockets are ready</li>
+  <li><strong>Work-stealing</strong>: idle workers steal tasks from busy workers' queues</li>
+</ul>
+
+<div class="diagram">
+CPU Core 0              CPU Core 1              CPU Core 2
+┌──────────────┐        ┌──────────────┐        ┌──────────────┐
+│ Worker Thread│        │ Worker Thread│        │ Worker Thread│
+│  Local Queue │◄──steal│  Local Queue │◄──steal│  Local Queue │
+│ [t1,t2,t3]  │        │ [t4,t5]     │        │ []  ← idle   │
+└──────────────┘        └──────────────┘        └──┬───────────┘
+                                                    │ steals task from core 1
+                                I/O Reactor Thread  │
+                              ┌─────────────────┐   │
+                              │ epoll_wait()    │   │
+                              │ "socket 42 ready"│   │
+                              │ wake task t6    │──►│
+                              └─────────────────┘
+</div>
+
+<p>Work-stealing keeps all cores busy without a central scheduler lock. When core 2 is idle, it steals work from core 1's queue — a lock-free operation using a Chase-Lev deque. This gives Tokio near-linear throughput scaling with core count.</p>
+</section>
+
+<!-- ── Bytes crate ────────────────────────────────────────────────────────── -->
+<section id="bytes-crate">
+<h3>Zero-Copy Bytes in Rust <span class="badge advanced">Advanced</span></h3>
+
+<p>The <code>bytes</code> crate provides <code>Bytes</code> — a reference-counted, immutable byte buffer. Cloning a <code>Bytes</code> object is O(1): it just increments an atomic reference counter and copies the pointer and length. No data is copied.</p>
+
+<pre><code><span class="cm">// Incoming frame: allocate once</span>
+<span class="kw">let</span> payload: <span class="ty">Bytes</span> = src.<span class="fn">split_to</span>(pay_len).<span class="fn">freeze</span>(); <span class="cm">// O(1)</span>
+
+<span class="cm">// Fan out to 100K subscribers: 100K clones, each O(1)</span>
+<span class="kw">for</span> sub <span class="kw">in</span> subscribers {
+    delivery.<span class="fn">payload</span> = payload.<span class="fn">clone</span>(); <span class="cm">// just ref-count increment</span>
+}
+<span class="cm">// Total data copied: ZERO. Memory freed when last clone drops.</span></code></pre>
+
+<p>This is how Keethu achieves fan-out to 100K subscribers without copying the message body 100K times. The payload is allocated once on receipt and reference-counted to all subscribers.</p>
+</section>
+
+<!-- ── DashMap ─────────────────────────────────────────────────────────── -->
+<section id="dashmap">
+<h3>DashMap — Concurrent HashMap Without Global Lock <span class="badge advanced">Advanced</span></h3>
+
+<p>Keethu's subscription registry maps topic names to subscriber lists. Under high concurrency (many publishes and subscribes simultaneously), a single <code>Mutex&lt;HashMap&gt;</code> becomes a bottleneck: all 32 CPU cores queue up waiting for the same lock.</p>
+
+<p>DashMap shards the map into N independent buckets (N = 4 × CPU count by default = 128 on a 32-core machine). A topic hashes to exactly one shard. Operations on different topics hit different shards with independent <code>RwLock</code>s — full parallelism.</p>
+
+<pre><code><span class="cm">// Engine::subscribe() in keethu-server/src/engine.rs</span>
+<span class="cm">// DashMap::entry() acquires only the shard lock for this topic</span>
+self.topics
+    .<span class="fn">entry</span>(topic)      <span class="cm">// locks shard N only</span>
+    .<span class="fn">or_default</span>()
+    .<span class="fn">push</span>(<span class="ty">SubEntry</span> { conn_id, sub_id, tx });
+<span class="cm">// Other topics' shards are completely unaffected</span></code></pre>
+
+<div class="faq-block">
+<h3>📖 FAQ — Rust &amp; Async</h3>
+<section id="faq-rust">
+<details><summary>What is the difference between async/await and threads? When do you use each?</summary>
+<div class="ans"><p>Threads are OS-managed, each with an ~8MB stack, preemptively scheduled. Use threads for CPU-bound work (computation) — they truly run in parallel. Async tasks are user-space state machines (~hundreds of bytes), cooperatively scheduled at <code>await</code> points. Use async for I/O-bound work (waiting for network, disk) — they're much cheaper than threads when waiting. Keethu's connection handler is async (I/O-bound: mostly waiting for client data). Keethu's future content filter (CPU-bound: SQL evaluation) may use Rayon thread pools.</p></div>
+</details>
+<details><summary>What is "pinning" in Rust async and why does it exist?</summary>
+<div class="ans"><p>An async state machine may hold self-references (a reference to data within itself). If the state machine is moved in memory, the self-references become invalid. <code>Pin&lt;T&gt;</code> is a type that prevents moving a value after pinning. You rarely interact with Pin directly — Tokio handles it internally. It comes up when implementing <code>Future</code> manually or using <code>tokio::pin!(future)</code> before <code>select!</code>.</p></div>
+</details>
+<details><summary>Why use mpsc channels between the read task and write task?</summary>
+<div class="ans"><p>Keethu's connection handler splits into two independent async tasks: a read task that processes incoming commands, and a write task that drains a channel and sends frames. Without this split, a slow write (blocked waiting for the socket to be writable) would stall processing incoming commands from the same client. The channel decouples them: the read task processes commands at full speed and sends responses to the channel; the write task drains the channel to the socket at whatever rate the socket allows. The bounded channel provides back-pressure: if the write task is behind, the channel fills up, causing <code>send().await</code> to suspend the read task — slowing down the pipeline naturally.</p></div>
+</details>
+<details><summary>What does "Send + Sync" mean in Rust and why does Tokio require it?</summary>
+<div class="ans"><p><code>Send</code> means a type can be safely transferred between threads. <code>Sync</code> means a type can be safely accessed from multiple threads simultaneously (via shared references). Tokio's work-stealing scheduler may move a task from one worker thread to another — so everything in a Tokio task must be <code>Send</code>. <code>Rc&lt;T&gt;</code> (non-atomic ref count) is not <code>Send</code> — use <code>Arc&lt;T&gt;</code> instead. <code>Cell&lt;T&gt;</code> is not <code>Sync</code> — use <code>AtomicT</code> or <code>Mutex&lt;T&gt;</code>. The compiler enforces these at compile time — no runtime races possible.</p></div>
+</details>
+</section>
+</div>
+</section>
+
+<hr>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 style="color:#a78bfa;font-size:1.1rem;margin-bottom:0">CHAPTER 6</h2>
+<section id="wire">
+<h2>Keethu Design — Putting It All Together <span class="badge pro">Pro</span></h2>
+
+<h3>Wire Protocol — Why a Custom Binary Format</h3>
+<p>Keethu uses a custom binary framing protocol instead of HTTP/REST or WebSocket text frames. The reasons are fundamental:</p>
+
+<table>
+<thead><tr><th>Property</th><th>HTTP/JSON</th><th>Keethu Binary</th></tr></thead>
+<tbody>
+<tr><td>Frame overhead</td><td>~200–2,000 bytes headers</td><td>16 bytes fixed</td></tr>
+<tr><td>Parsing</td><td>Text scan for \r\n\r\n</td><td>Read 4 u32 lengths, done</td></tr>
+<tr><td>Length framing</td><td>Content-Length or chunked</td><td>Built into header</td></tr>
+<tr><td>Multiplexing</td><td>HTTP/1.1: none; HTTP/2: yes</td><td>Built-in cmd_id per frame</td></tr>
+<tr><td>GC pressure</td><td>String allocations everywhere</td><td>Zero-copy Bytes slicing</td></tr>
+</tbody>
+</table>
+
+<div class="diagram">
+Keethu Frame Layout (16-byte fixed header):
+┌────────────┬─────┬───────┬──────────┬──────────────┬──────────────┐
+│  MAGIC     │ VER │ FLAGS │  CMD_ID  │  HDR_LEN     │  PAY_LEN     │
+│ 4B "KEET"  │ 1B  │  1B   │    2B    │     4B       │     4B       │
+│ 0x4B454554 │0x01 │ 0x00  │ 0x0001   │  (u32 BE)    │  (u32 BE)    │
+└────────────┴─────┴───────┴──────────┴──────────────┴──────────────┘
+│◄──────────────── 16 bytes fixed ─────────────────►│
+                              │
+                              ▼
+                    JSON header bytes (HDR_LEN)
+                    Raw payload bytes (PAY_LEN)
+
+Decode cost: read 16 bytes, two u32 reads → know exactly how much to read next.
+No scanning. No ambiguity. Zero allocations until JSON parse.
+</div>
+</section>
+
+<!-- ── Fan-Out Engine ─────────────────────────────────────────────────────── -->
+<section id="fanout">
+<h3>Fan-Out Engine Architecture <span class="badge pro">Pro</span></h3>
+
+<p>The publish path is the critical hot path. Every nanosecond counts.</p>
+
+<pre><code><span class="kw">pub fn</span> <span class="fn">publish</span>(&amp;self, topic: &amp;<span class="ty">str</span>, payload: <span class="ty">Bytes</span>, publisher: &amp;<span class="ty">str</span>) -&gt; <span class="ty">u64</span> {
+    <span class="cm">// Step 1: Atomic sequence number — no mutex, ~5 ns</span>
+    <span class="kw">let</span> seq = self.seq.<span class="fn">fetch_add</span>(<span class="num">1</span>, <span class="ty">Ordering</span>::Relaxed);
+    <span class="kw">let</span> ts  = chrono::<span class="ty">Utc</span>::<span class="fn">now</span>().<span class="fn">timestamp_millis</span>();
+
+    <span class="cm">// Step 2: DashMap shard lock for this topic only — ~20 ns</span>
+    <span class="kw">if let</span> <span class="ty">Some</span>(subs) = self.topics.<span class="fn">get</span>(topic) {
+        <span class="cm">// Step 3: Iterate subscribers — Vec = cache-friendly</span>
+        <span class="kw">for</span> sub <span class="kw">in</span> subs.<span class="fn">iter</span>() {
+            <span class="cm">// Step 4: Build delivery frame — Bytes clone is O(1)</span>
+            <span class="kw">let</span> frame = <span class="fn">delivery_frame</span>(&amp;sub.sub_id, topic, &amp;payload, seq, ts, publisher);
+            <span class="cm">// Step 5: try_send to per-connection channel — lock-free — ~10 ns</span>
+            <span class="kw">if</span> sub.tx.<span class="fn">try_send</span>(frame).<span class="fn">is_err</span>() {
+                warn!(<span class="st">"slow consumer dropped: conn {} sub {}"</span>, sub.conn_id, sub.sub_id);
+            }
+        }
+    }
+    seq <span class="cm">// caller gets the sequence number</span>
+}</code></pre>
+
+<p>Per subscriber: ~35 ns. At 100K subscribers: 3.5ms for the fan-out loop — within the 10ms budget, with 6.5ms remaining for network jitter, TCP buffer flushes, and scheduling.</p>
+
+<div class="info"><strong>Phase 2 Optimization (Rayon parallel fan-out)</strong><p>For topics with thousands of subscribers, Keethu will split the subscriber list across Rayon threads (one per CPU core) and fan-out in parallel, reducing 100K subscriber delivery from ~3.5ms to ~0.5ms on a 32-core machine.</p></div>
+</section>
+
+<!-- ── Back-Pressure ─────────────────────────────────────────────────────── -->
+<section id="backpressure">
+<h3>Back-Pressure Architecture <span class="badge pro">Pro</span></h3>
+
+<p>Back-pressure is the mechanism by which a slow consumer signals to producers to slow down. Without it, fast producers fill memory until the system crashes. Keethu implements back-pressure at every layer:</p>
+
+<div class="diagram">
+Publisher               Keethu Engine            Subscriber
+    │                        │                        │
+    │──PUBLISH──►            │                        │
+    │            fan-out loop│                        │
+    │            try_send()  │──frame──►[mpsc channel]│
+    │                        │          bounded(1024) │
+    │                        │                        │
+    │                        │  if channel FULL:      │
+    │                        │  drop + warn ◄─ slow consumer isolation
+    │                        │                        │
+    │                        │  mpsc consumer:        │
+    │                        │  ◄──frame──[mpsc]      │
+    │                        │  write to TCP socket   │
+    │                        │                        │
+    │                        │  if TCP buffer FULL:   │
+    │                        │  .await suspends write │
+    │                        │  task ← kernel back-pressure
+</div>
+
+<p>This design isolates slow subscribers: one subscriber's TCP stall does not affect the fan-out speed for other subscribers. Each connection has its own mpsc channel buffer.</p>
+</section>
+
+<!-- ── Real Numbers ────────────────────────────────────────────────────────── -->
+<section id="keethu-numbers">
+<h3>Latency Budget — Real Numbers <span class="badge pro">Pro</span></h3>
+
+<table>
+<thead><tr><th>Operation</th><th>Cost</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Receive frame from TCP (epoll wake + read)</td><td>~5–15 µs</td><td>Dominated by network RTT</td></tr>
+<tr><td>Frame decode (16-byte header parse)</td><td>&lt;100 ns</td><td>4 u32 reads</td></tr>
+<tr><td>JSON header parse (serde_json)</td><td>~500 ns–2 µs</td><td>Depends on header size</td></tr>
+<tr><td>DashMap topic lookup</td><td>~20–50 ns</td><td>Shard lock + hash</td></tr>
+<tr><td>Sequence number fetch_add</td><td>~5 ns</td><td>Single atomic instruction</td></tr>
+<tr><td>Delivery frame build</td><td>~200 ns</td><td>JSON serialize + Bytes clone</td></tr>
+<tr><td>try_send to mpsc per subscriber</td><td>~10–20 ns</td><td>Lock-free channel push</td></tr>
+<tr><td>Fan-out 100K subscribers (serial)</td><td>~3–5 ms</td><td>35 ns × 100K</td></tr>
+<tr><td>TCP write + kernel flush</td><td>~2–5 µs/conn</td><td>Async: non-blocking</td></tr>
+<tr><td><strong>Total p50 end-to-end</strong></td><td><strong>~4–6 ms</strong></td><td>LAN, loaded system</td></tr>
+<tr><td><strong>Total p99 target</strong></td><td><strong>≤10 ms</strong></td><td>Includes scheduling jitter</td></tr>
+</tbody>
+</table>
+</section>
+
+<div class="faq-block">
+<h3>📖 FAQ — Keethu Architecture</h3>
+<section id="faq-keethu">
+<details><summary>Why use a binary protocol with JSON headers instead of pure binary or pure text?</summary>
+<div class="ans"><p>Pure binary (protobuf, flatbuffers): fastest parse, but brittle — adding a field requires a schema change and recompile of all clients. Pure JSON text: flexible, but no framing (where does one message end?), verbose, slow to parse. Keethu's hybrid: 16-byte binary header provides length-prefixed framing with O(1) decode, while JSON headers provide schema flexibility — you can add new fields without breaking old clients. The payload is raw bytes — the application defines its own format, Keethu doesn't care.</p></div>
+</details>
+<details><summary>Why does Keethu use "KEET" (0x4B454554) as the magic number?</summary>
+<div class="ans"><p>The magic number's purpose is to detect protocol mismatches — if a client accidentally connects a random TCP client to Keethu's port, the first 4 bytes of their traffic almost certainly won't be 0x4B454554. If they don't match, Keethu closes the connection immediately with an <code>InvalidMagic</code> error rather than trying to parse garbage as a frame. The specific bytes encode the project name ("KEET" from Keethu) as ASCII, making wire captures easy to read: <code>00000000: 4b45 4554 01...  KEET...</code></p></div>
+</details>
+<details><summary>How does Keethu guarantee message ordering?</summary>
+<div class="ans"><p>Within a single topic, Keethu assigns a monotonically increasing global sequence number (AtomicU64 fetch_add) to each published message. Subscribers receive the <code>sequence</code> field in each PUBLISH_DELIVERY frame. Ordering is guaranteed from a single publisher's perspective — messages are delivered in the order they were published. However, if two publishers publish to the same topic simultaneously, their messages are sequenced atomically (fetch_add is serialized at the CPU level), but the order between their messages depends on which publish() call wins the atomic increment first.</p></div>
+</details>
+<details><summary>What is the difference between Keethu and Kafka?</summary>
+<div class="ans"><p>Kafka is a distributed log — it persists every message to disk (with replication), supports replay from any offset, and trades latency (~5–100ms typical) for durability and horizontal scale across dozens of brokers. Keethu V1 is an in-memory pub/sub bus — it targets &lt;10ms p99 on a single machine, supports live subscribers only (no durable replay in V1), and trades disk durability for speed. They solve different problems. Keethu's V2 SOW (State of the World) + txlog adds durable replay on a single machine — closer to AMPS, which is the inspiration.</p></div>
+</details>
+<details><summary>Could we use io_uring instead of epoll for lower latency?</summary>
+<div class="ans"><p>Yes, and it's on the roadmap. <code>io_uring</code> (Linux ≥5.1) submits I/O operations to a shared ring buffer between user space and kernel, avoiding most syscall overhead. For sequential workloads (write → read → write), io_uring chains can eliminate context switches entirely. Tokio has an experimental io_uring backend (<code>tokio-uring</code>). Expected gain: ~20–30% reduction in I/O overhead. The tradeoff is requiring Linux 5.10+ and giving up macOS/Windows compatibility for the server binary.</p></div>
+</details>
+<details><summary>How does Keethu handle 100K connections without running out of file descriptors?</summary>
+<div class="ans"><p>Each TCP connection consumes one file descriptor. Default Linux limit is 1,024 per process. Three changes are needed: (1) <code>ulimit -n 1048576</code> in the shell before starting Keethu (or set in systemd unit via <code>LimitNOFILE=1048576</code>); (2) <code>sysctl -w fs.file-max=2000000</code> for the system-wide limit; (3) ensure the Keethu process inherits the high limit. Keethu's systemd service file and Docker Compose config set these automatically via <code>ulimits: nofile: 1048576</code>.</p></div>
+</details>
+</section>
+</div>
+
+<hr>
+<!-- ── Footer ──────────────────────────────────────────────────────────── -->
+<div style="background:#16161f;border:1px solid #2d2d3f;border-radius:12px;
+            padding:28px 32px;margin-top:40px">
+  <h3 style="color:#a78bfa;margin-top:0">Further Reading</h3>
+  <ul style="color:#94a3b8;font-size:.88rem">
+    <li><em>Systems Performance</em> — Brendan Gregg (the bible of Linux performance engineering)</li>
+    <li><em>Computer Organization and Design</em> — Patterson &amp; Hennessy (CPU architecture from first principles)</li>
+    <li><em>The Art of Multiprocessor Programming</em> — Herlihy &amp; Shavit (lock-free algorithms)</li>
+    <li><em>TCP/IP Illustrated Vol. 1</em> — W. Richard Stevens (TCP internals, still definitive)</li>
+    <li><em>Rust Async Book</em> — <code>async-book</code> on GitHub (async/await from first principles)</li>
+    <li><em>The Linux Programming Interface</em> — Michael Kerrisk (everything about Linux syscalls)</li>
+    <li>The C10K Problem — Dan Kegel's original essay (search "kegel c10k")</li>
+    <li>Tokio internals blog series on tokio.rs</li>
+  </ul>
+  <p style="color:#4b5563;font-size:.78rem;margin:16px 0 0">
+    Keethu v0.1.0 · Apache-2.0 · Built with Rust, Tokio, DashMap, Axum
+  </p>
+</div>
+
+</main>
+
+<script>
+// Highlight active sidebar link on scroll
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('#sidebar a');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const a = document.querySelector('#sidebar a[href="#' + e.target.id + '"]');
+      if (a) a.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
