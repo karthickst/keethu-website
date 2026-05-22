@@ -21,11 +21,25 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;font-size:16px}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-     background:#0f0f14;color:#e2e8f0;line-height:1.7;display:flex;min-height:100vh}
+     background:#0f0f14;color:#e2e8f0;line-height:1.7;display:flex;min-height:100vh;
+     padding-top:44px}
+
+/* ── Top bar ──────────────────────────────────────────────────────────── */
+#topbar{position:fixed;top:0;left:0;right:0;height:44px;z-index:100;
+        background:rgba(15,15,20,.92);backdrop-filter:saturate(180%) blur(10px);
+        -webkit-backdrop-filter:saturate(180%) blur(10px);
+        border-bottom:1px solid #2d2d3f;display:flex;align-items:center;
+        padding:0 24px}
+#topbar a.home{display:inline-flex;align-items:center;gap:6px;
+               color:#a78bfa;text-decoration:none;font-size:.85rem;font-weight:600;
+               letter-spacing:.02em;transition:color .15s}
+#topbar a.home:hover{color:#c4b5fd}
+#topbar a.home .arrow{font-size:1rem;line-height:1}
 
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 #sidebar{width:270px;min-width:270px;background:#16161f;border-right:1px solid #2d2d3f;
-         position:sticky;top:0;height:100vh;overflow-y:auto;padding:24px 0;flex-shrink:0}
+         position:sticky;top:44px;height:calc(100vh - 44px);overflow-y:auto;
+         padding:24px 0;flex-shrink:0}
 #sidebar h2{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
             color:#6b7280;padding:0 20px 8px;margin-bottom:4px}
 #sidebar a{display:block;padding:5px 20px;font-size:.82rem;color:#94a3b8;
@@ -139,6 +153,13 @@ hr{border:none;border-top:1px solid #2d2d3f;margin:40px 0}
 </style>
 </head>
 <body>
+
+<!-- ── Top bar ───────────────────────────────────────────────────────────── -->
+<header id="topbar">
+  <a class="home" href="/" aria-label="Keethu home">
+    <span class="arrow">←</span><span>keethu.com</span>
+  </a>
+</header>
 
 <!-- ── Sidebar ───────────────────────────────────────────────────────────── -->
 <nav id="sidebar">
